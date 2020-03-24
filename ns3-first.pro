@@ -1,5 +1,3 @@
-include(ns3-first.pri)
-
 TEMPLATE = subdirs
 
 SUBDIRS = \
