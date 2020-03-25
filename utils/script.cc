@@ -22,9 +22,9 @@ void Script::SetScriptName(const std::string& script_name)
 
 int Script::CreateOutputDir(const std::string& output_dir)
 {
-  std::string pref = output_dir;
-  pref += "/" + m_script_name;
-  return mkdir(pref.c_str (), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  m_output_dir = output_dir;
+  m_output_dir += "/" + m_script_name;
+  return mkdir(m_output_dir.c_str (), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
 const std::string& Script::GetOutputDir() const

@@ -18,3 +18,8 @@ SOURCES += \
     $$PWD/../utils/script.cc
 
 message ($$INCLUDEPATH)
+
+unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ -lns3.30-core-debug
+
+INCLUDEPATH += $$(NS3DIR)/build
+DEPENDPATH += $$(NS3DIR)/build
