@@ -1,7 +1,5 @@
 #!/bin/bash
 
-QT_CREATOR="${QT_PATH}/../Tools/QtCreator/bin/qtcreator"
-
 WORK_DIR="$(dirname $0)"
 cd "$WORK_DIR"
 WORK_DIR="$PWD"
@@ -13,5 +11,5 @@ if [ ! -f "${PROJ_FILE}" ]; then
 	exit 1
 fi
 
-"${QT_CREATOR}" "${PROJ_FILE}" > /dev/null 2>&1 &
+qtcreator "${PROJ_FILE}" > /dev/null 2>&1 &
 exit 0
