@@ -13,7 +13,7 @@ unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ \
                     -l$$(NS3VER)-internet-debug \
                     -l$$(NS3VER)-point-to-point-debug \
                     -l$$(NS3VER)-applications-debug \
-                    -l$$(NS3VER)-stats-debug \
+                    -l$$(NS3VER)-stats-debug
 
 DEPENDPATH += $$(NS3DIR)/build
 INCLUDEPATH += $$(NS3DIR)/build

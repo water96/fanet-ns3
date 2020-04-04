@@ -4,7 +4,20 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += \
-    dynamic-global-routing.cc
+        main.cc
+
+INCLUDEPATH += $$(NS3DIR)/build
+INCLUDEPATH += $$PWD/../
+
+
+#Other
+#HEADERS += \
+#    $$PWD/../utils/script.h
+
+#SOURCES += \
+#    #$$PWD/../utils/script.cc
+
+message ($$INCLUDEPATH)
 
 unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ \
                     -l$$(NS3VER)-core-debug \
@@ -14,6 +27,12 @@ unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ \
                     -l$$(NS3VER)-applications-debug \
                     -l$$(NS3VER)-stats-debug \
                     -l$$(NS3VER)-csma-debug \
+                    -l$$(NS3VER)-bridge-debug \
+                    -l$$(NS3VER)-internet-apps-debug \
+                    -l$$(NS3VER)-wifi-debug \
+                    -l$$(NS3VER)-mobility-debug
 
-DEPENDPATH += $$(NS3DIR)/build
+message ($$LIBS)
+
 INCLUDEPATH += $$(NS3DIR)/build
+DEPENDPATH += $$(NS3DIR)/build
