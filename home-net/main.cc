@@ -23,11 +23,6 @@ void rtt_ping_cb(ns3::Ptr<ns3::OutputStreamWrapper> stream, ns3::Time rtt)
   *(stream->GetStream ()) << ns3::Simulator::Now ().GetSeconds () << "\t" << rtt.GetMilliSeconds () << std::endl;
 }
 
-void bulk_tx_cb(ns3::Ptr<ns3::OutputStreamWrapper> stream, Ptr< const Packet > packet)
-{
-  *(stream->GetStream ()) << ns3::Simulator::Now ().GetSeconds () << "\t" << packet->GetSize () << std::endl;
-}
-
 class TracerBase
 {
 protected:
@@ -84,8 +79,9 @@ class QueCalcer : public TracerBase
 {
 private:
   std::map<Ptr<const Packet>, double > que;
-
+  uint64_t m_total_send;
 public:
+  QueCalcer() : m_total_send(0){}
   void TraceTxStart(Ptr< const Packet > packet)
   {
     que.insert (std::pair<Ptr<const Packet>, double>(packet, Simulator::Now ().GetSeconds ()));
@@ -96,9 +92,27 @@ public:
   {
     double now = Simulator::Now ().GetSeconds ();
     double diff = now - que[packet];
-    m_out << now << "\t" << diff << std::endl;
+    m_total_send += packet->GetSize ();
+    m_out << now << "\t" << diff << "\t" << m_total_send << std::endl;
   }
 };
+
+class MobTracer : public TracerBase
+{
+private:
+  Ptr<MobilityModel> ap_mobility;
+public:
+  MobTracer() : ap_mobility(nullptr){}
+  void SetApMobilityModel(Ptr<MobilityModel> mob)
+  {
+    ap_mobility = mob;
+  }
+  void CourseChangeCb(Ptr< const MobilityModel > model)
+  {
+    TracerBase::m_out << Simulator::Now ().GetSeconds () << "\t" << model->GetPosition ().x << "\t" << model->GetPosition ().y << "\t" << model->GetVelocity ().GetLength () << "\t" << model->GetDistanceFrom (ap_mobility) << "\t" << ap_mobility->GetPosition ().x << "\t" << ap_mobility->GetPosition ().y << std::endl;
+  }
+};
+
 
 int main (int argc, char *argv[])
 {
@@ -117,6 +131,7 @@ int main (int argc, char *argv[])
   YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
   YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
   phy.SetChannel (channel.Create ());
+
 
   WifiHelper wifi;
   wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
@@ -152,6 +167,9 @@ int main (int argc, char *argv[])
 
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (ap);
+
+  Ptr<MobilityModel> andr_mobility = andr->GetObject<MobilityModel>();
+  Ptr<MobilityModel> ap_mobility = ap->GetObject<MobilityModel>();
 
 
   ns3::CsmaHelper csma;
@@ -212,7 +230,6 @@ int main (int argc, char *argv[])
   ns3::V4PingHelper ping_app(if_ip.GetAddress (0));
   ns3::ApplicationContainer ping_apps = ping_app.Install (NodeContainer(win, andr));
   ping_apps.Start (ns3::Seconds (0.0));
-  ping_apps.Stop (ns3::Seconds (20.0));
 
   ns3::InetSocketAddress sink_rcv(ns3::Ipv4Address::GetAny (), 3303);
   ns3::PacketSinkHelper sink("ns3::TcpSocketFactory", sink_rcv);
@@ -227,11 +244,11 @@ int main (int argc, char *argv[])
   nas_apps.Start (ns3::Seconds (0.0));
 
   ns3::AsciiTraceHelper asciiTraceHelper;
-  ns3::Ptr<ns3::OutputStreamWrapper> stream = asciiTraceHelper.CreateFileStream ("rtt.dat");
-  ping_apps.Get (0)->TraceConnectWithoutContext ("Rtt", ns3::MakeBoundCallback(&rtt_ping_cb, stream));
+  ns3::Ptr<ns3::OutputStreamWrapper> stream0 = asciiTraceHelper.CreateFileStream ("win_rtt.dat");
+  ping_apps.Get (0)->TraceConnectWithoutContext ("Rtt", ns3::MakeBoundCallback(&rtt_ping_cb, stream0));
 
-  ns3::Ptr<ns3::OutputStreamWrapper> tx_stream = asciiTraceHelper.CreateFileStream ("bulk_tx.dat");
-  nas_apps.Get (0)->TraceConnectWithoutContext ("Tx", ns3::MakeBoundCallback(&bulk_tx_cb, tx_stream));
+  ns3::Ptr<ns3::OutputStreamWrapper> stream1 = asciiTraceHelper.CreateFileStream ("andr_rtt.dat");
+  ping_apps.Get (1)->TraceConnectWithoutContext ("Rtt", ns3::MakeBoundCallback(&rtt_ping_cb, stream1));
 
   QueCalcer que_c;
   que_c.CreateOutput ("que_delay.dat");
@@ -243,7 +260,15 @@ int main (int argc, char *argv[])
   cl.CollectFrom (if_ip.GetAddress (3).operator Address ());
   lin_apps.Get (0)->TraceConnectWithoutContext ("RxWithAddresses", ns3::MakeCallback (&PacketStatCollector::Trace, &cl));
 
-  csma.EnablePcap ("ip-devs-pcap", ip_devs);
+  MobTracer mb;
+  mb.CreateOutput ("traj.dat");
+  mb.SetApMobilityModel (ap_mobility);
+  andr_mobility->TraceConnectWithoutContext ("CourseChange", ns3::MakeCallback(&MobTracer::CourseChangeCb, &mb));
+
+  ip_stack.EnablePcapIpv4 ("ip-devs-pcap", ip_nodes);
+
+
+  Simulator::Stop (Seconds (20.0));
 
   ns3::Simulator::Run ();
   ns3::Simulator::Destroy ();
