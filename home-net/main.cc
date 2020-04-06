@@ -192,7 +192,10 @@ int main (int argc, char *argv[])
   }
 
   ns3::BridgeHelper sw_bridge;
+  ns3::BridgeHelper ap_bridge;
   sw_bridge.Install (sw, sw_ports);
+
+  NetDeviceContainer ap_devs_bridge = ap_bridge.Install (ap, NetDeviceContainer (ap->GetDevice (0), ap->GetDevice (1)));
 
   ns3::NetDeviceContainer ip_devs;
   ip_devs.Add (rt->GetDevice (0));
@@ -266,7 +269,13 @@ int main (int argc, char *argv[])
   andr_mobility->TraceConnectWithoutContext ("CourseChange", ns3::MakeCallback(&MobTracer::CourseChangeCb, &mb));
 
   ip_stack.EnablePcapIpv4 ("ip-devs-pcap", ip_nodes);
+  ip_stack.EnableAsciiIpv4 ("andr_log", if_ip.Get (4).first, 0);
+  ip_stack.EnableAsciiIpv4 ("andr_log", if_ip.Get (4).first, 1);
+  csma.EnablePcap ("ap", ap->GetDevice (1));
 
+  phy.EnablePcap ("wifi_devs", NodeContainer (andr, ap));
+
+  csma.EnablePcap ("switch", sw_ports);
 
   Simulator::Stop (Seconds (20.0));
 
@@ -275,3 +284,4 @@ int main (int argc, char *argv[])
 
   return 0;
 }
+
