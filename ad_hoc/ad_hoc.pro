@@ -11,11 +11,11 @@ INCLUDEPATH += $$PWD/../
 
 
 #Other
-#HEADERS += \
-#    $$PWD/../utils/tracers.h
+HEADERS += \
+    $$PWD/../utils/tracers.h
 
-#SOURCES += \
-#    $$PWD/../utils/tracers.cc
+SOURCES += \
+    $$PWD/../utils/tracers.cc
 
 message ($$INCLUDEPATH)
 

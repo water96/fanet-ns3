@@ -4,7 +4,8 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += \
-        main.cc
+        main.cc \
+        utopiamac1.cc
 
 INCLUDEPATH += $$(NS3DIR)/build
 INCLUDEPATH += $$PWD/../
@@ -37,3 +38,6 @@ message ($$LIBS)
 
 INCLUDEPATH += $$(NS3DIR)/build
 DEPENDPATH += $$(NS3DIR)/build
+
+HEADERS += \
+    utopiamac1.h

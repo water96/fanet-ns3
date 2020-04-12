@@ -16,6 +16,7 @@
 #include "ns3/mobility-helper.h"
 #include "ns3/rectangle.h"
 #include "ns3/animation-interface.h"
+#include "ns3/point-to-point-helper.h"
 
 using namespace ns3;
 
@@ -126,6 +127,7 @@ int main (int argc, char *argv[])
 
   //All nodes
   ns3::Ptr<ns3::Node> rt = ns3::CreateObject<ns3::Node>();
+  ns3::Ptr<ns3::Node> remote = ns3::CreateObject<ns3::Node>();
   ns3::Ptr<ns3::Node> sw_ap = ns3::CreateObject<ns3::Node>();
   ns3::Ptr<ns3::Node> win = ns3::CreateObject<ns3::Node>();
   ns3::Ptr<ns3::Node> lin = ns3::CreateObject<ns3::Node>();
@@ -167,7 +169,7 @@ int main (int argc, char *argv[])
                                  "LayoutType", StringValue ("RowFirst"));
 
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Bounds", RectangleValue (Rectangle (-50, 50, -50, 50)));
+                             "Bounds", RectangleValue (Rectangle (0, 50, 0, 50)));
   mobility.Install (andr);
 
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
@@ -198,6 +200,12 @@ int main (int argc, char *argv[])
   ns3::BridgeHelper sw_bridge;
   sw_bridge.Install (sw_ap, sw_ports);
 
+  PointToPointHelper ppphelper;
+  ppphelper.SetChannelAttribute ("Delay", TimeValue(MilliSeconds (10)));
+  ppphelper.SetDeviceAttribute ("DataRate", ns3::StringValue("100Mbps"));
+  NetDeviceContainer ppp_devs = ppphelper.Install (rt, remote);
+
+
   ns3::NetDeviceContainer ip_devs;
   ip_devs.Add (rt->GetDevice (0));
   ip_devs.Add (win->GetDevice (0));
@@ -211,6 +219,12 @@ int main (int argc, char *argv[])
     ip_nodes.Add ((*d)->GetNode ());
   }
 
+  ns3::NetDeviceContainer ip_ext_net_devs;
+  ip_ext_net_devs.Add (rt->GetDevice (1));
+  ip_ext_net_devs.Add (remote->GetDevice (0));
+
+  ip_nodes.Add (remote);
+
   //Ip
   ns3::InternetStackHelper ip_stack;
   ip_stack.Install (ip_nodes);
@@ -218,6 +232,9 @@ int main (int argc, char *argv[])
   ns3::Ipv4AddressHelper ip_helper;
   ip_helper.SetBase ("10.0.1.0", "255.255.255.0");
   ns3::Ipv4InterfaceContainer if_ip = ip_helper.Assign (ip_devs);
+
+  ip_helper.SetBase ("20.0.1.0", "255.255.255.0");
+  ns3::Ipv4InterfaceContainer if_ip_ext = ip_helper.Assign (ip_ext_net_devs);
 
   ns3::Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
 
@@ -243,7 +260,7 @@ int main (int argc, char *argv[])
   ns3::InetSocketAddress bulk_snd(if_ip.GetAddress (2), 3303);
   ns3::BulkSendHelper bulk("ns3::TcpSocketFactory", bulk_snd);
   bulk.SetAttribute ("MaxBytes", ns3::UintegerValue (40000000));
-  ns3::ApplicationContainer nas_apps = bulk.Install (nas);
+  ns3::ApplicationContainer nas_apps = bulk.Install (remote);
   nas_apps.Start (ns3::Seconds (0.0));
 
   //Traces
@@ -255,12 +272,12 @@ int main (int argc, char *argv[])
 
   QueCalcer que_c;
   que_c.CreateOutput ("que_delay.dat");
-  nas->GetDevice (0)->TraceConnectWithoutContext ("MacTx", ns3::MakeCallback (&QueCalcer::TraceTxStart, &que_c));
-  nas->GetDevice (0)->TraceConnectWithoutContext ("PhyTxEnd", ns3::MakeCallback (&QueCalcer::TraceTxEnd, &que_c));
+  remote->GetDevice (0)->TraceConnectWithoutContext ("MacTx", ns3::MakeCallback (&QueCalcer::TraceTxStart, &que_c));
+  remote->GetDevice (0)->TraceConnectWithoutContext ("PhyTxEnd", ns3::MakeCallback (&QueCalcer::TraceTxEnd, &que_c));
 
   PacketStatCollector cl;
   cl.CreateOutput ("lin_rx.dat");
-  cl.CollectFrom (if_ip.GetAddress (3).operator Address ());
+  cl.CollectFrom (if_ip_ext.GetAddress (1).operator Address ());
   lin_apps.Get (0)->TraceConnectWithoutContext ("RxWithAddresses", ns3::MakeCallback (&PacketStatCollector::Trace, &cl));
 
   MobTracer mb;
@@ -276,6 +293,13 @@ int main (int argc, char *argv[])
   phy.EnablePcap ("wifi_devs", NodeContainer(andr));
 
   AnimationInterface anim ("animation.xml");  // where "animation.xml" is any arbitrary filenames
+
+  anim.SetConstantPosition (win, 10, 10);
+  anim.SetConstantPosition (lin, 10, 15);
+  anim.SetConstantPosition (nas, 15, 15);
+  anim.SetConstantPosition (sw_ap, 20, 20);
+  anim.SetConstantPosition (rt, 25, 30);
+  anim.SetConstantPosition (remote, 80, 60);
 
   Simulator::Stop (Seconds (20.0));
 
