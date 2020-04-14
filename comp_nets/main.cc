@@ -185,7 +185,7 @@ int main()
 
   //===========================================
   RcvStatCollector st;
-  st.CreateOutput ("utopia1_problem1.dat");
+  st.CreateOutput ("utopia1_problem1_solve.dat");
   nd_b->SetReceiveCallback ( MakeCallback(&RcvStatCollector::Receive, &st ));
   //===========================================
 

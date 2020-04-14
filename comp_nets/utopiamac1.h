@@ -95,7 +95,7 @@ private:
   void TransmitComplete (void);
 
   //bool m_linkUp; //!< Flag indicating whether or not the link is up
-  //ns3::Ptr<Queue<Packet> > m_queue; //!< The Queue for outgoing packets.
+  ns3::Ptr<ns3::Queue<ns3::Packet> > m_queue; //!< The Queue for outgoing packets.
   //DataRate m_bps; //!< The device nominal Data rate. Zero means infinite
   ns3::EventId TransmitCompleteEvent; //!< the Tx Complete event
 

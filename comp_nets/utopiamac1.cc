@@ -97,7 +97,8 @@ uint8_t UtopiaChannel::Send (Ptr<Packet> p, uint16_t protocol, Ptr<UtopiaDevice>
   if(sender == m_dev1)
   {
       Simulator::ScheduleWithContext (m_dev2->GetNode()->GetId(), m_delay, &UtopiaDevice::Receive, m_dev2, p->Copy (), protocol, Mac8Address::ConvertFrom(sender->GetAddress ()));
-      Simulator::ScheduleWithContext (this->GetId (), m_delay, &UtopiaChannel::set_link_state, this, LINK_STATE::IDLE);
+      //Simulator::ScheduleWithContext (this->GetId (), m_delay, &UtopiaChannel::set_link_state, this, LINK_STATE::IDLE);
+      Simulator::Schedule (m_delay, &UtopiaChannel::set_link_state, this, LINK_STATE::IDLE);
       m_state = LINK_STATE::BUSY;
       return 0;
   }
@@ -105,7 +106,8 @@ uint8_t UtopiaChannel::Send (Ptr<Packet> p, uint16_t protocol, Ptr<UtopiaDevice>
   if(sender == m_dev2)
   {
       Simulator::ScheduleWithContext (m_dev1->GetNode()->GetId(), m_delay, &UtopiaDevice::Receive, m_dev1, p->Copy (), protocol, Mac8Address::ConvertFrom(sender->GetAddress ()));
-      Simulator::ScheduleWithContext (this->GetId (), m_delay, &UtopiaChannel::set_link_state, this, LINK_STATE::IDLE);
+      //Simulator::ScheduleWithContext (this->GetId (), m_delay, &UtopiaChannel::set_link_state, this, LINK_STATE::IDLE);
+      Simulator::Schedule (m_delay, &UtopiaChannel::set_link_state, this, LINK_STATE::IDLE);
       m_state = LINK_STATE::BUSY;
       return 0;
   }
@@ -191,6 +193,9 @@ UtopiaDevice::UtopiaDevice ()
   m_net_lev_delay = CreateObject<UniformRandomVariable> ();
   m_net_lev_delay->SetAttribute ("Min", DoubleValue (MIN_US));
   m_net_lev_delay->SetAttribute ("Max", DoubleValue (MAX_US));
+
+  m_queue = CreateObject<ns3::DropTailQueue<Packet> >();
+  m_queue->SetMaxSize (ns3::QueueSize(QueueSizeUnit::PACKETS, 1));
 }
 
 void
@@ -332,6 +337,11 @@ UtopiaDevice::IsBridge (void) const
 void UtopiaDevice::proc_with_delay(ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from)
 {
   m_rxCallback (this, packet, protocol, from);
+  Ptr<Packet> p = Create<Packet>();
+  UtopiaMacHeader mch;
+  mch.m_kind = UtopiaMacHeader::frame_kind::ack;
+  p->AddHeader (mch);
+  m_channel->Send (p, protocol, this);
 }
 
 void
@@ -342,15 +352,32 @@ UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
   Ptr<Packet> p = packet->Copy ();
   UtopiaMacHeader mch;
   p->RemoveHeader (mch);
-  if(m_net_level_proc_event.IsRunning ())
-  {
 
-  }
-  else
+  switch (mch.m_kind)
   {
-    auto d = this->m_net_lev_delay->GetInteger ();
-    m_net_level_proc_event = Simulator::Schedule ( MicroSeconds (d), &UtopiaDevice::proc_with_delay, this, p, protocol, from);
+    case UtopiaMacHeader::frame_kind::ack:
+      m_queue->Dequeue ();
+    break;
+
+    case UtopiaMacHeader::frame_kind::nak:
+    break;
+
+    case UtopiaMacHeader::frame_kind::data:
+      if(m_net_level_proc_event.IsRunning ())
+      {
+
+      }
+      else
+      {
+        auto d = this->m_net_lev_delay->GetInteger ();
+        m_net_level_proc_event = Simulator::Schedule ( MicroSeconds (d), &UtopiaDevice::proc_with_delay, this, p, protocol, from);
+      }
+    break;
+
+    default:
+    break;
   }
+
 }
 
 bool
@@ -365,6 +392,11 @@ bool
 UtopiaDevice::SendFrom (Ptr<Packet> p, const Address& source, const Address& dest, uint16_t protocolNumber)
 {
   NS_LOG_FUNCTION (this << p << source << dest << protocolNumber);
+
+  if(!m_queue->IsEmpty ())
+  {
+    return false;
+  }
 
   if( m_address != Mac8Address::ConvertFrom (source))
   {
@@ -393,6 +425,7 @@ UtopiaDevice::SendFrom (Ptr<Packet> p, const Address& source, const Address& des
   packet->AddHeader (hdr);
 
   m_channel->Send (packet, protocolNumber, this);
+  m_queue->Enqueue (packet);
   return true;
 }
 
@@ -435,6 +468,7 @@ UtopiaDevice::DoDispose (void)
   NS_LOG_FUNCTION (this);
   m_channel = 0;
   m_node = 0;
+  m_queue->Flush ();
   if (TransmitCompleteEvent.IsRunning ())
     {
       TransmitCompleteEvent.Cancel ();
