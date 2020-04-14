@@ -126,8 +126,9 @@ class RcvStatCollector : public TracerBase
 private:
   uint32_t m_cnter;
   ns3::Time m_t;
+  uint8_t m_state;
 public:
-  RcvStatCollector() : m_cnter(0), m_t(0) {}
+  RcvStatCollector() : m_cnter(0), m_t(0), m_state(0) {}
 
   bool Receive(Ptr<NetDevice> dev, Ptr<const Packet> packet, uint16_t protocol, const Address& from)
   {
@@ -141,8 +142,54 @@ public:
     m_t = now;
     return true;
   }
-
 };
+
+class RcvStatCollectorProblem1 : public TracerBase
+{
+private:
+  uint32_t m_cnter;
+  ns3::Time m_t;
+  uint8_t m_state;  //0 - free, 1 - busy
+  Ptr<UniformRandomVariable> m_proc_delay;
+
+  static const uint16_t MIN_US = 700;
+  static const uint16_t MAX_US = 1500;
+
+public:
+  RcvStatCollectorProblem1() : m_cnter(0), m_t(0), m_state(0)
+  {
+    m_proc_delay = CreateObject<UniformRandomVariable> ();
+    m_proc_delay->SetAttribute ("Min", DoubleValue (MIN_US));
+    m_proc_delay->SetAttribute ("Max", DoubleValue (MAX_US));
+  }
+
+  void ProcessIncomingPacket(Ptr<NetDevice> dev, Ptr<const Packet> packet, uint16_t protocol, const Address& from)
+  {
+    UpperHeader hdr;
+    ns3::Time now = Simulator::Now ();
+    Ptr<Packet> copy_p = packet->Copy ();
+    double speed = packet->GetSize () * 8.0 / (now.GetSeconds () - m_t.GetSeconds ());
+    copy_p->RemoveHeader (hdr);
+    TracerBase::m_out << now.GetSeconds () << "\t" << hdr.m_seq << "\t" << speed << std::endl;
+    m_cnter++;
+    m_t = now;
+    m_state = 0;
+  }
+
+  bool Receive(Ptr<NetDevice> dev, Ptr<const Packet> packet, uint16_t protocol, const Address& from)
+  {
+    if(m_state)   //busy
+    {
+      return false;
+    }
+    m_state = 1;
+    Ptr<Packet> p = packet->Copy ();
+    //Simulate process delay
+    Simulator::Schedule (Time(MicroSeconds (m_proc_delay->GetInteger ())), &RcvStatCollectorProblem1::ProcessIncomingPacket, this, dev, p, protocol, from);
+    return true;
+  }
+};
+
 
 int main()
 {
@@ -184,11 +231,16 @@ int main()
   //===========================================
 
   //===========================================
-  RcvStatCollector st;
-  st.CreateOutput ("utopia1.dat");
-  nd_b->SetReceiveCallback ( MakeCallback(&RcvStatCollector::Receive, &st ));
+//  RcvStatCollector st;
+//  st.CreateOutput ("utopia1.dat");
+//  nd_b->SetReceiveCallback ( MakeCallback(&RcvStatCollector::Receive, &st ));
   //===========================================
 
+  //===========================================
+  RcvStatCollectorProblem1 st;
+  st.CreateOutput ("utopia1_problem1.dat");
+  nd_b->SetReceiveCallback ( MakeCallback(&RcvStatCollectorProblem1::Receive, &st ));
+  //===========================================
 
   //===========================================
   Simulator::Run ();
