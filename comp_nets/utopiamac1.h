@@ -88,7 +88,7 @@ private:
   uint16_t m_mtu;   //!< MTU
   uint32_t m_ifIndex; //!< Interface index
   ns3::Mac8Address m_address; //!< MAC address
-  //ns3::Ptr<ErrorModel> m_receiveErrorModel; //!< Receive error model.
+  ns3::Ptr<ns3::ErrorModel> m_receiveErrorModel; //!< Receive error model.
 
   ns3::TracedCallback<ns3::Ptr<const ns3::Packet> > m_phyRxDropTrace;
 
@@ -120,7 +120,7 @@ public:
 
   //ns3::Ptr<ns3::Queue<ns3::Packet> > GetQueue (void) const;
 
-  //void SetReceiveErrorModel (ns3::Ptr<ns3::ErrorModel> em);
+  void SetReceiveErrorModel (ns3::Ptr<ns3::ErrorModel> em);
 
   // inherited from ns3::NetDevice base class.
   virtual void SetIfIndex (const uint32_t index);

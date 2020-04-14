@@ -196,6 +196,12 @@ UtopiaDevice::UtopiaDevice ()
 
   m_queue = CreateObject<ns3::DropTailQueue<Packet> >();
   m_queue->SetMaxSize (ns3::QueueSize(QueueSizeUnit::PACKETS, 1));
+
+  m_receiveErrorModel = CreateObject<ns3::RateErrorModel>();
+  Ptr<ns3::RateErrorModel> ptr(m_receiveErrorModel->GetObject<ns3::RateErrorModel>());
+  ptr->SetRate (0.001);
+  ptr->SetUnit (RateErrorModel::ErrorUnit::ERROR_UNIT_PACKET);
+  ptr->Enable ();
 }
 
 void
@@ -222,12 +228,12 @@ UtopiaDevice::SetChannel (Ptr<UtopiaChannel> channel)
 //  m_queue = q;
 //}
 
-//void
-//UtopiaDevice::SetReceiveErrorModel (Ptr<ErrorModel> em)
-//{
-//  NS_LOG_FUNCTION (this << em);
-//  m_receiveErrorModel = em;
-//}
+void
+UtopiaDevice::SetReceiveErrorModel (Ptr<ErrorModel> em)
+{
+  NS_LOG_FUNCTION (this << em);
+  m_receiveErrorModel = em;
+}
 
 void
 UtopiaDevice::SetIfIndex (const uint32_t index)
@@ -348,6 +354,12 @@ void
 UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
 {
   NS_LOG_FUNCTION (this << packet << protocol << from);
+
+  if (m_receiveErrorModel && m_receiveErrorModel->IsCorrupt (packet) )
+    {
+      m_phyRxDropTrace (packet);
+      return;
+    }
 
   Ptr<Packet> p = packet->Copy ();
   UtopiaMacHeader mch;
