@@ -163,6 +163,8 @@ Ptr<NetDevice> UtopiaChannel::GetDevice (std::size_t i) const
 
 const uint16_t UtopiaDevice::UTOPIA_MTU = 1024;
 
+UtopiaDevice::~UtopiaDevice(){}
+
 TypeId
 UtopiaDevice::GetTypeId (void)
 {
@@ -186,17 +188,9 @@ UtopiaDevice::UtopiaDevice ()
     m_ifIndex (0)
 {
   NS_LOG_FUNCTION (this);
-}
-
-void
-UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
-{
-  NS_LOG_FUNCTION (this << packet << protocol << from);
-
-  Ptr<Packet> p = packet->Copy ();
-  UtopiaMacHeader mch;
-  p->RemoveHeader (mch);
-  m_rxCallback (this, p, protocol, from);
+  m_net_lev_delay = CreateObject<UniformRandomVariable> ();
+  m_net_lev_delay->SetAttribute ("Min", DoubleValue (MIN_US));
+  m_net_lev_delay->SetAttribute ("Max", DoubleValue (MAX_US));
 }
 
 void
@@ -335,6 +329,30 @@ UtopiaDevice::IsBridge (void) const
   return false;
 }
 
+void UtopiaDevice::proc_with_delay(ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from)
+{
+  m_rxCallback (this, packet, protocol, from);
+}
+
+void
+UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
+{
+  NS_LOG_FUNCTION (this << packet << protocol << from);
+
+  Ptr<Packet> p = packet->Copy ();
+  UtopiaMacHeader mch;
+  p->RemoveHeader (mch);
+  if(m_net_level_proc_event.IsRunning ())
+  {
+
+  }
+  else
+  {
+    auto d = this->m_net_lev_delay->GetInteger ();
+    m_net_level_proc_event = Simulator::Schedule ( MicroSeconds (d), &UtopiaDevice::proc_with_delay, this, p, protocol, from);
+  }
+}
+
 bool
 UtopiaDevice::Send (Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber)
 {
@@ -421,6 +439,11 @@ UtopiaDevice::DoDispose (void)
     {
       TransmitCompleteEvent.Cancel ();
     }
+  if (m_net_level_proc_event.IsRunning ())
+    {
+      m_net_level_proc_event.Cancel ();
+    }
+
   NetDevice::DoDispose ();
 }
 

@@ -77,6 +77,11 @@ public:
 class UtopiaDevice : public ns3::NetDevice
 {
 private:
+  ns3::Ptr<ns3::UniformRandomVariable> m_net_lev_delay;
+  ns3::EventId m_net_level_proc_event;
+  static const uint16_t MIN_US = 700;
+  static const uint16_t MAX_US = 1500;
+
   ns3::Ptr<UtopiaChannel> m_channel; //!< the channel the device is connected to
   ns3::NetDevice::ReceiveCallback m_rxCallback; //!< Receive callback
   ns3::Ptr<ns3::Node> m_node; //!< Node this ns3::NetDevice is associated to
@@ -96,12 +101,16 @@ private:
 
 
   //TracedCallback<> m_linkChangeCallbacks;
+
+  void proc_with_delay(ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from);
+
 public:
 
   const static uint16_t UTOPIA_MTU;
 
   static ns3::TypeId GetTypeId (void);
   UtopiaDevice ();
+  virtual ~UtopiaDevice();
 
   void Receive (ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from);
 
