@@ -193,7 +193,10 @@ UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
 {
   NS_LOG_FUNCTION (this << packet << protocol << from);
 
-  m_rxCallback (this, packet, protocol, from);
+  Ptr<Packet> p = packet->Copy ();
+  UtopiaMacHeader mch;
+  p->RemoveHeader (mch);
+  m_rxCallback (this, p, protocol, from);
 }
 
 void
