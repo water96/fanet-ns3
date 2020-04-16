@@ -187,7 +187,8 @@ UtopiaDevice::UtopiaDevice ()
   : m_channel (0),
     m_node (0),
     m_mtu (UTOPIA_MTU),
-    m_ifIndex (0)
+    m_ifIndex (0),
+    m_resend_timeout(MilliSeconds (RESEND_TIMEOUT_MS))
 {
   NS_LOG_FUNCTION (this);
   m_net_lev_delay = CreateObject<UniformRandomVariable> ();
@@ -369,6 +370,7 @@ UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
   {
     case UtopiaMacHeader::frame_kind::ack:
       m_queue->Dequeue ();
+      m_resend_by_timeout_event.Cancel ();
     break;
 
     case UtopiaMacHeader::frame_kind::nak:
@@ -381,7 +383,8 @@ UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
       }
       else
       {
-        auto d = this->m_net_lev_delay->GetInteger ();
+        //auto d = this->m_net_lev_delay->GetInteger ();
+        auto d = 0; //No delay to process
         m_net_level_proc_event = Simulator::Schedule ( MicroSeconds (d), &UtopiaDevice::proc_with_delay, this, p, protocol, from);
       }
     break;
@@ -405,7 +408,8 @@ UtopiaDevice::SendFrom (Ptr<Packet> p, const Address& source, const Address& des
 {
   NS_LOG_FUNCTION (this << p << source << dest << protocolNumber);
 
-  if(!m_queue->IsEmpty ())
+  //if(!m_queue->IsEmpty ())
+  if(m_resend_by_timeout_event.IsRunning ())
   {
     return false;
   }
@@ -437,6 +441,7 @@ UtopiaDevice::SendFrom (Ptr<Packet> p, const Address& source, const Address& des
   packet->AddHeader (hdr);
 
   m_channel->Send (packet, protocolNumber, this);
+  m_resend_by_timeout_event = Simulator::Schedule (m_resend_timeout, &UtopiaChannel::Send, m_channel, packet, protocolNumber, this);
   m_queue->Enqueue (packet);
   return true;
 }

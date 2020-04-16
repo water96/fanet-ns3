@@ -32,8 +32,8 @@ using namespace ns3;
 
 const std::string delim_str = "\n====================================\n";
 
-const ns3::Time period = MilliSeconds (1);
-const uint32_t BytesToSend = 1000000;
+const ns3::Time period = MicroSeconds (10);
+const uint32_t BytesToSend = 2000000;
 const uint16_t p_size = 500;
 
 class UpperHeader : public ns3::Header
@@ -143,6 +143,24 @@ public:
   }
 };
 
+class DropsCollector : public TracerBase
+{
+private:
+
+public:
+  DropsCollector() {}
+
+  void Drop(ns3::Ptr<const ns3::Packet> packet)
+  {
+    UtopiaMacHeader hdr;
+    ns3::Time now = Simulator::Now ();
+    Ptr<Packet> copy_p = packet->Copy ();
+    copy_p->RemoveHeader (hdr);
+    TracerBase::m_out << now.GetSeconds () << "\t" << static_cast<int>(hdr.m_kind) << std::endl;
+  }
+};
+
+
 
 int main()
 {
@@ -185,8 +203,15 @@ int main()
 
   //===========================================
   RcvStatCollector st;
-  st.CreateOutput ("utopia2_problem2_solve.dat");
+  st.CreateOutput ("utopia3.dat");
   nd_b->SetReceiveCallback ( MakeCallback(&RcvStatCollector::Receive, &st ));
+  //===========================================
+
+  //===========================================
+  DropsCollector dr;
+  dr.CreateOutput ("drops_utopia3.dat");
+  nd_a->TraceConnectWithoutContext ("PhyRxDrop", MakeCallback(&DropsCollector::Drop, &dr));
+  nd_b->TraceConnectWithoutContext ("PhyRxDrop", MakeCallback(&DropsCollector::Drop, &dr));
   //===========================================
 
 

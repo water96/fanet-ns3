@@ -90,6 +90,10 @@ private:
   ns3::Mac8Address m_address; //!< MAC address
   ns3::Ptr<ns3::ErrorModel> m_receiveErrorModel; //!< Receive error model.
 
+  static const uint16_t RESEND_TIMEOUT_MS = 15;
+  ns3::Time m_resend_timeout;
+  ns3::EventId m_resend_by_timeout_event;
+
   ns3::TracedCallback<ns3::Ptr<const ns3::Packet> > m_phyRxDropTrace;
 
   void TransmitComplete (void);
