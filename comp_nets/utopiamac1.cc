@@ -188,7 +188,8 @@ UtopiaDevice::UtopiaDevice ()
     m_node (0),
     m_mtu (UTOPIA_MTU),
     m_ifIndex (0),
-    m_resend_timeout(MilliSeconds (RESEND_TIMEOUT_MS))
+    m_resend_timeout(MilliSeconds (RESEND_TIMEOUT_MS)),
+    m_seq_cnter(0)
 {
   NS_LOG_FUNCTION (this);
   m_net_lev_delay = CreateObject<UniformRandomVariable> ();
@@ -343,12 +344,18 @@ UtopiaDevice::IsBridge (void) const
 
 void UtopiaDevice::proc_with_delay(ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from)
 {
-  m_rxCallback (this, packet, protocol, from);
-  Ptr<Packet> p = Create<Packet>();
+  Ptr<Packet> p = packet->Copy ();
+  UtopiaMacHeader rx_mch;
+  p->RemoveHeader (rx_mch);
+
+  m_rxCallback (this, p, protocol, from);
+  Ptr<Packet> packet_answer = Create<Packet>();
   UtopiaMacHeader mch;
+  mch.m_ack_seq = rx_mch.m_seq;
+  mch.m_seq = m_seq_cnter;
   mch.m_kind = UtopiaMacHeader::frame_kind::ack;
-  p->AddHeader (mch);
-  m_channel->Send (p, protocol, this);
+  packet_answer->AddHeader (mch);
+  m_channel->Send (packet_answer, protocol, this);
 }
 
 void
@@ -369,8 +376,12 @@ UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
   switch (mch.m_kind)
   {
     case UtopiaMacHeader::frame_kind::ack:
-      m_queue->Dequeue ();
-      m_resend_by_timeout_event.Cancel ();
+      if( mch.m_ack_seq == m_seq_cnter )
+      {
+        m_queue->Dequeue ();
+        m_resend_by_timeout_event.Cancel ();
+        m_seq_cnter = (m_seq_cnter + 1)&SEQ_MASK;
+      }
     break;
 
     case UtopiaMacHeader::frame_kind::nak:
@@ -383,9 +394,23 @@ UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
       }
       else
       {
-        //auto d = this->m_net_lev_delay->GetInteger ();
-        auto d = 0; //No delay to process
-        m_net_level_proc_event = Simulator::Schedule ( MicroSeconds (d), &UtopiaDevice::proc_with_delay, this, p, protocol, from);
+        if(mch.m_seq == (m_seq_cnter & SEQ_MASK))
+        {
+          //auto d = this->m_net_lev_delay->GetInteger ();
+          auto d = 0; //No delay to process
+          m_net_level_proc_event = Simulator::Schedule ( MicroSeconds (d), &UtopiaDevice::proc_with_delay, this, packet, protocol, from);
+          m_seq_cnter = (m_seq_cnter + 1)&SEQ_MASK;
+        }
+        else
+        {
+          Ptr<Packet> packet_answer = Create<Packet>();
+          UtopiaMacHeader tx_mch;
+          tx_mch.m_ack_seq = (m_seq_cnter - 1) & SEQ_MASK;
+          tx_mch.m_seq = m_seq_cnter & SEQ_MASK;
+          tx_mch.m_kind = UtopiaMacHeader::frame_kind::ack;
+          packet_answer->AddHeader (tx_mch);
+          m_channel->Send (packet_answer, protocol, this);
+        }
       }
     break;
 
@@ -434,9 +459,9 @@ UtopiaDevice::SendFrom (Ptr<Packet> p, const Address& source, const Address& des
   Mac8Address from = Mac8Address::ConvertFrom (source);
 
   UtopiaMacHeader hdr;
-  hdr.m_seq = 0;
+  hdr.m_seq = m_seq_cnter & SEQ_MASK;
   hdr.m_kind = UtopiaMacHeader::frame_kind::data;
-  hdr.m_ack_seq = 0;
+  hdr.m_ack_seq = (m_seq_cnter - 1) & SEQ_MASK;
 
   packet->AddHeader (hdr);
 

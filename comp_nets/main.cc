@@ -136,7 +136,13 @@ public:
     Ptr<Packet> copy_p = packet->Copy ();
     double speed = packet->GetSize () * 8.0 / (now.GetSeconds () - m_t.GetSeconds ());
     copy_p->RemoveHeader (hdr);
-    TracerBase::m_out << now.GetSeconds () << "\t" << hdr.m_seq << "\t" << speed << std::endl;
+    std::string ss("");
+    if(hdr.m_seq != m_cnter)
+    {
+      ss = "1";
+    }
+
+    TracerBase::m_out << now.GetSeconds () << "\t" << hdr.m_seq << "\t" << speed << "\t" << ss << std::endl;
     m_cnter++;
     m_t = now;
     return true;

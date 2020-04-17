@@ -93,6 +93,8 @@ private:
   static const uint16_t RESEND_TIMEOUT_MS = 15;
   ns3::Time m_resend_timeout;
   ns3::EventId m_resend_by_timeout_event;
+  uint8_t m_seq_cnter;
+  static const uint8_t SEQ_MASK = 0x01;
 
   ns3::TracedCallback<ns3::Ptr<const ns3::Packet> > m_phyRxDropTrace;
 
