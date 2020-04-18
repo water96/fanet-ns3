@@ -33,7 +33,7 @@ using namespace ns3;
 const std::string delim_str = "\n====================================\n";
 
 const ns3::Time period = MicroSeconds (10);
-const uint32_t BytesToSend = 2000000;
+const uint32_t BytesToSend = 200000;
 const uint16_t p_size = 500;
 
 class UpperHeader : public ns3::Header
@@ -140,6 +140,7 @@ public:
     if(hdr.m_seq != m_cnter)
     {
       ss = "1";
+      m_cnter = hdr.m_seq;
     }
 
     TracerBase::m_out << now.GetSeconds () << "\t" << hdr.m_seq << "\t" << speed << "\t" << ss << std::endl;
@@ -172,7 +173,7 @@ int main()
 {
 
   //===========================================
-  LogComponentEnableAll (LogLevel::LOG_ALL);
+  //LogComponentEnableAll (LogLevel::LOG_ALL);
   //===========================================
 
   //===========================================
@@ -182,7 +183,7 @@ int main()
 
   //===========================================
   ns3::Ptr<UtopiaChannel> ch = CreateObject<UtopiaChannel>();
-  //ch->SetAttribute ("Delay", TimeValue(MilliSeconds (2)));
+  ch->SetAttribute ("Delay", TimeValue(MilliSeconds (50)));
 
   ns3::Ptr<UtopiaDevice> nd_a = CreateObject<UtopiaDevice>();
   ns3::Ptr<UtopiaDevice> nd_b = CreateObject<UtopiaDevice>();
@@ -195,6 +196,9 @@ int main()
 
   nd_a->SetChannel (ch);
   nd_b->SetChannel (ch);
+
+  nd_a->SetAttribute ("DataRate", DataRateValue (DataRate ("50kb/s")));
+  nd_b->SetAttribute ("DataRate", DataRateValue (DataRate ("50kb/s")));
 
   std::cout << "Channel state: " << static_cast<uint8_t>(ch->GetLinkState ()) << std::endl;
 

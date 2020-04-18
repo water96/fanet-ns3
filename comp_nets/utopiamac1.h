@@ -90,25 +90,28 @@ private:
   ns3::Mac8Address m_address; //!< MAC address
   ns3::Ptr<ns3::ErrorModel> m_receiveErrorModel; //!< Receive error model.
 
-  static const uint16_t RESEND_TIMEOUT_MS = 15;
+  static const uint16_t RESEND_TIMEOUT_MS = 500;
   ns3::Time m_resend_timeout;
   ns3::EventId m_resend_by_timeout_event;
-  uint8_t m_seq_cnter;
+  uint8_t m_send_seq_cnter;
+  uint8_t m_expect_seq_cnter;
   static const uint8_t SEQ_MASK = 0x01;
 
   ns3::TracedCallback<ns3::Ptr<const ns3::Packet> > m_phyRxDropTrace;
 
-  void TransmitComplete (void);
+  void TransmitComplete (ns3::Ptr<ns3::Packet> p, uint16_t protocol);
 
   //bool m_linkUp; //!< Flag indicating whether or not the link is up
   ns3::Ptr<ns3::Queue<ns3::Packet> > m_queue; //!< The Queue for outgoing packets.
-  //DataRate m_bps; //!< The device nominal Data rate. Zero means infinite
+  ns3::DataRate m_bps; //!< The device nominal Data rate. Zero means infinite
   ns3::EventId TransmitCompleteEvent; //!< the Tx Complete event
 
 
   //TracedCallback<> m_linkChangeCallbacks;
 
   void proc_with_delay(ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from);
+
+  bool send_packet_internal(uint8_t ack, uint8_t seq, UtopiaMacHeader::frame_kind kind, ns3::Ptr<ns3::Packet> p, uint16_t prot);
 
 public:
 
