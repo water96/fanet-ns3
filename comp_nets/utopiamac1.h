@@ -1,6 +1,9 @@
 #ifndef UTOPIAMAC1_H
 #define UTOPIAMAC1_H
 
+#include <map>
+#include <queue>
+
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/node.h"
@@ -90,30 +93,43 @@ private:
   ns3::Mac8Address m_address; //!< MAC address
   ns3::Ptr<ns3::ErrorModel> m_receiveErrorModel; //!< Receive error model.
 
-  static const uint16_t RESEND_TIMEOUT_MS = 500;
+  static const uint16_t RESEND_TIMEOUT_MS = 200;
   ns3::Time m_resend_timeout;
-  ns3::EventId m_resend_by_timeout_event;
+  std::map<uint8_t, ns3::EventId> m_resend_by_timeout_events;
   uint8_t m_send_seq_cnter;
   uint8_t m_expect_seq_cnter;
-  static const uint8_t SEQ_MASK = 0x01;
+  uint8_t m_ack_expected_cnter;
+  uint8_t m_go_back_n;
+  uint8_t MAX_SEQ;
+  uint8_t m_n_buffered;
 
+  bool m_upper_level_locked;
   ns3::TracedCallback<ns3::Ptr<const ns3::Packet> > m_phyRxDropTrace;
 
   void TransmitComplete (ns3::Ptr<ns3::Packet> p, uint16_t protocol);
 
   //bool m_linkUp; //!< Flag indicating whether or not the link is up
-  ns3::Ptr<ns3::Queue<ns3::Packet> > m_queue; //!< The Queue for outgoing packets.
+  ns3::Ptr<ns3::Queue<ns3::Packet> > m_tx_queue; //!< The Queue for outgoing packets.
+  std::vector<std::pair<ns3::Ptr<ns3::Packet>, ns3::EventId > > m_buffer;
   ns3::DataRate m_bps; //!< The device nominal Data rate. Zero means infinite
   ns3::EventId TransmitCompleteEvent; //!< the Tx Complete event
 
 
   //TracedCallback<> m_linkChangeCallbacks;
 
-  void proc_with_delay(ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from);
+  void timeout_event(uint8_t seq_num, uint16_t protocolNumber);
+
+  bool in_between(uint8_t a, uint8_t b, uint8_t c) const;
 
   bool send_packet_internal(uint8_t ack, uint8_t seq, UtopiaMacHeader::frame_kind kind, ns3::Ptr<ns3::Packet> p, uint16_t prot);
+  bool send_packet_internal(ns3::Ptr<ns3::Packet> p, uint16_t prot);
+
+  inline void incr(uint8_t& i);
+  inline uint8_t wrap(uint8_t i);
 
 public:
+
+  void SetGoBackN(uint8_t n);
 
   const static uint16_t UTOPIA_MTU;
 

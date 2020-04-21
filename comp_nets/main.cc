@@ -32,9 +32,9 @@ using namespace ns3;
 
 const std::string delim_str = "\n====================================\n";
 
-const ns3::Time period = MicroSeconds (10);
+const ns3::Time period = MilliSeconds (1);
 const uint32_t BytesToSend = 200000;
-const uint16_t p_size = 500;
+const uint16_t p_size = 100;
 
 class UpperHeader : public ns3::Header
 {
@@ -143,7 +143,7 @@ public:
       m_cnter = hdr.m_seq;
     }
 
-    TracerBase::m_out << now.GetSeconds () << "\t" << hdr.m_seq << "\t" << speed << "\t" << ss << std::endl;
+    TracerBase::m_out << now.GetSeconds () << "\t" << hdr.m_seq << "\t" << speed << "\t" << hdr.m_seq % 8 << "\t" << ss << std::endl;
     m_cnter++;
     m_t = now;
     return true;
@@ -199,6 +199,9 @@ int main()
 
   nd_a->SetAttribute ("DataRate", DataRateValue (DataRate ("50kb/s")));
   nd_b->SetAttribute ("DataRate", DataRateValue (DataRate ("50kb/s")));
+
+  nd_a->SetGoBackN (3);
+  nd_b->SetGoBackN (3);
 
   std::cout << "Channel state: " << static_cast<uint8_t>(ch->GetLinkState ()) << std::endl;
 

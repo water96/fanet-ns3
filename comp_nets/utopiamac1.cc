@@ -195,21 +195,27 @@ UtopiaDevice::UtopiaDevice ()
     m_ifIndex (0),
     m_resend_timeout(MilliSeconds (RESEND_TIMEOUT_MS)),
     m_send_seq_cnter(0),
-    m_expect_seq_cnter(0)
+    m_expect_seq_cnter(0),
+    m_ack_expected_cnter(0),
+    m_go_back_n(1),
+    MAX_SEQ(2^m_go_back_n - 1),
+    m_upper_level_locked(false),
+    m_n_buffered(0)
 {
   NS_LOG_FUNCTION (this);
   m_net_lev_delay = CreateObject<UniformRandomVariable> ();
   m_net_lev_delay->SetAttribute ("Min", DoubleValue (MIN_US));
   m_net_lev_delay->SetAttribute ("Max", DoubleValue (MAX_US));
 
-  m_queue = CreateObject<ns3::DropTailQueue<Packet> >();
-  m_queue->SetMaxSize (ns3::QueueSize(QueueSizeUnit::PACKETS, 1));
+  m_tx_queue = CreateObject<ns3::DropTailQueue<Packet> >();
+  m_tx_queue->SetMaxSize (ns3::QueueSize(QueueSizeUnit::PACKETS, MAX_SEQ + 1));
 
   m_receiveErrorModel = CreateObject<ns3::RateErrorModel>();
   Ptr<ns3::RateErrorModel> ptr(m_receiveErrorModel->GetObject<ns3::RateErrorModel>());
   ptr->SetRate (0.01);
   ptr->SetUnit (RateErrorModel::ErrorUnit::ERROR_UNIT_PACKET);
-  ptr->Enable ();
+  //ptr->Enable ();
+  ptr->Disable();
 }
 
 void
@@ -348,44 +354,41 @@ UtopiaDevice::IsBridge (void) const
   return false;
 }
 
-void UtopiaDevice::proc_with_delay(ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from)
+void UtopiaDevice::SetGoBackN(uint8_t n)
 {
-
+  m_go_back_n = n;
+  MAX_SEQ = 1;
+  while(n)
+  {
+    MAX_SEQ = MAX_SEQ << 1;
+    n--;
+  }
+  MAX_SEQ -= 1;
+  m_buffer = std::vector<std::pair<ns3::Ptr<ns3::Packet>, ns3::EventId > >(MAX_SEQ + 1);
+  m_tx_queue->SetMaxSize (ns3::QueueSize(QueueSizeUnit::PACKETS, 0));
 }
 
-bool UtopiaDevice::send_packet_internal(uint8_t ack, uint8_t seq, UtopiaMacHeader::frame_kind kind, ns3::Ptr<ns3::Packet> p, uint16_t prot)
+bool UtopiaDevice::in_between(uint8_t a, uint8_t b, uint8_t c) const
 {
-  if(TransmitCompleteEvent.IsRunning ())
-  {
-    return false;
-  }
+  if (((a <= b) && (b < c)) || ((c < a) && (a <= b)) || ((b < c) && (c < a)))
+    return(true);
+  else
+    return(false);
+}
 
-  Ptr<Packet> packet = p;
-  if(packet == nullptr)
-  {
-    packet = Create<Packet>();
-  }
+inline void UtopiaDevice::incr(uint8_t& i)
+{
+  if(i < MAX_SEQ)
+    i++;
+  else
+    i = 0;
+}
 
-  if (packet->GetSize () > GetMtu ())
-  {
-    return false;
-  }
-
-  UtopiaMacHeader mch;
-  mch.m_ack_seq = ack;
-  mch.m_seq = seq;
-  mch.m_kind = kind;
-  packet->AddHeader (mch);
-  m_channel->Send (packet, prot, this);
-
-  Time txTime = Time (0);
-  if (m_bps > DataRate (0))
-  {
-    txTime = m_bps.CalculateBytesTxTime (packet->GetSize ());
-  }
-  TransmitCompleteEvent = Simulator::Schedule (txTime, &UtopiaDevice::TransmitComplete, this, nullptr, 0);
-
-  return true;
+inline uint8_t UtopiaDevice::wrap(uint8_t i)
+{
+  if(i > MAX_SEQ)
+    return MAX_SEQ;
+  return i;
 }
 
 void
@@ -405,61 +408,26 @@ UtopiaDevice::Receive (Ptr<Packet> packet, uint16_t protocol, Mac8Address from)
 
   if(mch.m_seq == m_expect_seq_cnter)
   {
-    m_expect_seq_cnter = (m_expect_seq_cnter + 1)&SEQ_MASK;
     m_rxCallback (this, p, protocol, from);
+    incr(m_expect_seq_cnter);
   }
 
-  if( mch.m_ack_seq == m_send_seq_cnter )
+  while(in_between(m_ack_expected_cnter, mch.m_ack_seq, m_send_seq_cnter))
   {
-    m_queue->Dequeue ();
-    m_resend_by_timeout_event.Cancel ();
-    m_send_seq_cnter = (m_send_seq_cnter + 1)&SEQ_MASK;
+    m_buffer[m_ack_expected_cnter].second.Cancel();
+    m_n_buffered--;
+    incr(m_ack_expected_cnter);
   }
 
   if (mch.m_kind == UtopiaMacHeader::frame_kind::data)
   {
-    send_packet_internal((m_expect_seq_cnter - 1) & SEQ_MASK,
-                         m_send_seq_cnter,
-                         UtopiaMacHeader::frame_kind::ack,
-                         nullptr,
-                         protocol);
-  }
-
-/*
-  switch (mch.m_kind)
-  {
-    case UtopiaMacHeader::frame_kind::ack:
-      if( mch.m_ack_seq == m_send_seq_cnter )
-      {
-        m_queue->Dequeue ();
-        m_resend_by_timeout_event.Cancel ();
-        m_send_seq_cnter = (m_send_seq_cnter + 1)&SEQ_MASK;
-      }
-    break;
-
-    case UtopiaMacHeader::frame_kind::nak:
-    break;
-
-    case UtopiaMacHeader::frame_kind::data:
-      if(mch.m_seq == m_expect_seq_cnter)
-      {
-        m_rxCallback (this, p, protocol, from);
-
-        m_expect_seq_cnter = (m_expect_seq_cnter + 1)&SEQ_MASK;
-      }
-
-      send_packet_internal((m_expect_seq_cnter - 1) & SEQ_MASK,
+      send_packet_internal(mch.m_seq,
                            m_send_seq_cnter,
                            UtopiaMacHeader::frame_kind::ack,
                            nullptr,
                            protocol);
-    break;
-
-    default:
-      return;
-    break;
+    //incr(m_send_seq_cnter);
   }
-*/
 }
 
 bool
@@ -473,46 +441,154 @@ UtopiaDevice::Send (Ptr<Packet> packet, const Address& dest, uint16_t protocolNu
 bool
 UtopiaDevice::SendFrom (Ptr<Packet> p, const Address& source, const Address& dest, uint16_t protocolNumber)
 {
-  NS_LOG_FUNCTION (this << p << source << dest << protocolNumber);
+    NS_LOG_FUNCTION (this << p << source << dest << protocolNumber);
 
-  if(m_queue->GetNPackets () == m_queue->GetMaxSize ().GetValue ())
+    if( m_address != Mac8Address::ConvertFrom (source))
+    {
+        return false;
+    }
+
+    if(m_n_buffered == MAX_SEQ)
+    {
+      return false;
+    }
+
+    if(m_upper_level_locked)
+    {
+      return false;
+    }
+
+    Mac8Address to = Mac8Address::ConvertFrom (dest);
+    Mac8Address from = Mac8Address::ConvertFrom (source);
+
+    ns3::Ptr<Packet> p_tmp = p->Copy();
+    bool res = send_packet_internal((m_expect_seq_cnter + MAX_SEQ) % (MAX_SEQ + 1),
+                              m_send_seq_cnter,
+                              UtopiaMacHeader::frame_kind::data,
+                              p_tmp,
+                              protocolNumber);
+    if(res)
+    {
+        m_buffer[m_send_seq_cnter].first = p;
+        m_buffer[m_send_seq_cnter].second = Simulator::Schedule (m_resend_timeout, &UtopiaDevice::timeout_event, this, m_send_seq_cnter, protocolNumber);
+        incr(m_send_seq_cnter);
+        m_n_buffered++;
+    }
+    return res;
+}
+
+bool UtopiaDevice::send_packet_internal(ns3::Ptr<ns3::Packet> p, uint16_t prot)
+{
+  if(m_tx_queue->GetNPackets () == m_tx_queue->GetMaxSize ().GetValue ())
   {
     return false;
   }
 
-  if( m_address != Mac8Address::ConvertFrom (source))
+  if (p->GetSize () > GetMtu ())
   {
     return false;
   }
 
-  Mac8Address to = Mac8Address::ConvertFrom (dest);
-  Mac8Address from = Mac8Address::ConvertFrom (source);
+  if(TransmitCompleteEvent.IsRunning ())
+  {
+    return m_tx_queue->Enqueue (p);
+  }
 
-  Ptr<Packet> packet = p->Copy ();
+  Time txTime = Time (0);
+  if (m_bps > DataRate (0))
+  {
+    txTime = m_bps.CalculateBytesTxTime (p->GetSize ());
+  }
+  Simulator::Schedule (txTime, &UtopiaChannel::Send, m_channel, p, prot, this);
+  TransmitCompleteEvent = Simulator::Schedule (txTime, &UtopiaDevice::TransmitComplete, this, p, prot);
 
-  bool res = send_packet_internal((m_expect_seq_cnter - 1) & SEQ_MASK,
-                                  m_send_seq_cnter,
+  return true;
+}
+
+bool UtopiaDevice::send_packet_internal(uint8_t ack, uint8_t seq, UtopiaMacHeader::frame_kind kind, ns3::Ptr<ns3::Packet> p, uint16_t prot)
+{
+  Ptr<Packet> packet = p;
+  if(packet == nullptr)
+  {
+    packet = Create<Packet>();
+  }
+
+  UtopiaMacHeader mch;
+  mch.m_ack_seq = ack;
+  mch.m_seq = seq;
+  mch.m_kind = kind;
+  packet->AddHeader (mch);
+
+  return send_packet_internal(packet, prot);
+}
+
+void UtopiaDevice::timeout_event(uint8_t seq_num, uint16_t protocolNumber)
+{
+  bool status = true;
+  m_upper_level_locked = true;
+  m_buffer[seq_num].second.Cancel();
+
+  status = send_packet_internal((m_expect_seq_cnter + MAX_SEQ) % (MAX_SEQ + 1),
+                                  seq_num,
                                   UtopiaMacHeader::frame_kind::data,
-                                  packet,
+                                  m_buffer[m_send_seq_cnter].first->Copy(),
                                   protocolNumber);
-  if(res)
+  if(status == false)
   {
-    m_resend_by_timeout_event = Simulator::Schedule (m_resend_timeout, &UtopiaChannel::Send, m_channel, packet, protocolNumber, this);
-    m_queue->Enqueue (p);
+    ns3::Time time_for_tx_complete = Simulator::GetDelayLeft(TransmitCompleteEvent);
+    m_buffer[m_send_seq_cnter].second = Simulator::Schedule (time_for_tx_complete, &UtopiaDevice::timeout_event, this, seq_num, protocolNumber);
+  }
+  else
+  {
+    m_buffer[m_send_seq_cnter].second = Simulator::Schedule (m_resend_timeout, &UtopiaDevice::timeout_event, this, seq_num, protocolNumber);
   }
 
-  return res;
+//  Simulator::Remove(m_buffer[seq_num].second);
+  /*
+  while(seq_num != m_send_seq_cnter)
+  {
+    m_buffer[seq_num].second.Cancel();
+    Simulator::Remove(m_buffer[seq_num].second);
+    if(status)
+    {
+      status &= send_packet_internal((m_expect_seq_cnter + MAX_SEQ) % (MAX_SEQ + 1),
+                                      seq_num,
+                                      UtopiaMacHeader::frame_kind::data,
+                                      m_buffer[m_send_seq_cnter].first->Copy(),
+                                      protocolNumber);
+      if(status == false)
+      {
+        ns3::Time time_for_tx_complete = Simulator::GetDelayLeft(TransmitCompleteEvent);
+        m_buffer[m_send_seq_cnter].second = Simulator::Schedule (time_for_tx_complete, &UtopiaDevice::timeout_event, this, seq_num, protocolNumber);
+      }
+      else
+      {
+        m_buffer[m_send_seq_cnter].second = Simulator::Schedule (m_resend_timeout, &UtopiaDevice::timeout_event, this, seq_num, protocolNumber);
+      }
+    }
+    incr(seq_num);
+  }*/
+  m_upper_level_locked = !status;
 }
 
 void
 UtopiaDevice::TransmitComplete (ns3::Ptr<ns3::Packet> p, uint16_t protocol)
 {
   NS_LOG_FUNCTION (this);
-  if(p != nullptr)
+
+  if(m_tx_queue->GetNPackets ())
   {
-    //m_resend_by_timeout_event = Simulator::Schedule (m_resend_timeout, &UtopiaChannel::Send, m_channel, p, protocol, this);
-    //m_queue->Enqueue (p);
+    ns3::Ptr<ns3::Packet> p_tmp = m_tx_queue->Dequeue ();
+
+    Time txTime = Time (0);
+    if (m_bps > DataRate (0))
+    {
+      txTime = m_bps.CalculateBytesTxTime (p_tmp->GetSize ());
+    }
+    Simulator::Schedule (txTime, &UtopiaChannel::Send, m_channel, p_tmp, protocol, this);
+    TransmitCompleteEvent = Simulator::Schedule (txTime, &UtopiaDevice::TransmitComplete, this, p_tmp, protocol);
   }
+
   return;
 }
 
@@ -547,7 +623,9 @@ UtopiaDevice::DoDispose (void)
   NS_LOG_FUNCTION (this);
   m_channel = 0;
   m_node = 0;
-  m_queue->Flush ();
+  m_tx_queue->Flush ();
+  auto stop = [](std::pair<ns3::Ptr<ns3::Packet>, ns3::EventId> e ){ e.second.Cancel (); };
+  std::for_each(m_buffer.begin (), m_buffer.end (), stop);
   if (TransmitCompleteEvent.IsRunning ())
     {
       TransmitCompleteEvent.Cancel ();
