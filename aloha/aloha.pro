@@ -4,11 +4,9 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += \
-        aloha.cc \
         main.cc
 
-HEADERS += \
-    aloha.h
+HEADERS +=
 
 INCLUDEPATH += $$(NS3DIR)/build
 INCLUDEPATH += $$PWD/../
@@ -35,7 +33,8 @@ unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ \
                     -l$$(NS3VER)-internet-apps-debug \
                     -l$$(NS3VER)-wifi-debug \
                     -l$$(NS3VER)-mobility-debug \
-                    -l$$(NS3VER)-netanim-debug
+                    -l$$(NS3VER)-netanim-debug \
+                    -l$$(NS3VER)-wave-debug
 
 message ($$LIBS)
 
