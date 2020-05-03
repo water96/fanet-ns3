@@ -1,5 +1,5 @@
-#ifndef UTOPIAMAC1_H
-#define UTOPIAMAC1_H
+#ifndef ALOHA_H
+#define ALOHA_H
 
 #include <map>
 #include <queue>
@@ -10,10 +10,12 @@
 
 #include "ns3/channel.h"
 #include "ns3/net-device.h"
+#include "ns3/mobility-module.h"
+#include "ns3/propagation-module.h"
 
-class UtopiaDevice;
+class AlohaDevice;
 
-class UtopiaMacHeader : public ns3::Header
+class AlohaMacHeader : public ns3::Header
 {
 public:
   enum class frame_kind
@@ -29,8 +31,8 @@ public:
 
 public:
 
-  UtopiaMacHeader (){}
-  virtual ~UtopiaMacHeader (){}
+  AlohaMacHeader (){}
+  virtual ~AlohaMacHeader (){}
 
   static ns3::TypeId GetTypeId (void);
   virtual ns3::TypeId GetInstanceTypeId (void) const;
@@ -40,7 +42,8 @@ public:
   virtual uint32_t GetSerializedSize (void) const;
 };
 
-class UtopiaChannel : public ns3::Channel
+
+class AlohaChannel : public ns3::Channel
 {
 public:
   enum class LINK_STATE
@@ -52,9 +55,11 @@ public:
 
 private:
   ns3::Time m_delay; //!< The assigned speed-of-light delay of the channel
-  ns3::Ptr<UtopiaDevice> m_dev1, m_dev2; //!< devices connected by the channel
+  std::vector<ns3::Ptr<AlohaDevice>> m_devs; //!< devices connected by the channel
 
   LINK_STATE m_state;
+  ns3::Ptr<ns3::PropagationDelayModel> m_prop_delay_model;
+  ns3::Ptr<ns3::PropagationLossModel> m_prop_loss_model;
 
 protected:
   virtual void set_link_state(LINK_STATE st);
@@ -62,14 +67,14 @@ protected:
 public:
 
   static ns3::TypeId GetTypeId (void);
-  UtopiaChannel ();
-  virtual ~UtopiaChannel();
+  AlohaChannel ();
+  virtual ~AlohaChannel();
 
-  virtual uint8_t Send (ns3::Ptr<ns3::Packet> p, uint16_t protocol, ns3::Ptr<UtopiaDevice> sender);
+  virtual uint8_t Send (ns3::Ptr<ns3::Packet> p, uint16_t protocol, ns3::Ptr<AlohaDevice> sender, ns3::Ptr<AlohaDevice> rcver);
 
-  virtual bool Add (ns3::Ptr<UtopiaDevice> dev);
+  virtual bool Add (ns3::Ptr<AlohaDevice> dev);
 
-  virtual UtopiaChannel::LINK_STATE GetLinkState() const;
+  virtual AlohaChannel::LINK_STATE GetLinkState() const;
 
   // inherited from ns3::Channel
   virtual std::size_t GetNDevices (void) const override;
@@ -77,73 +82,53 @@ public:
   virtual ns3::Ptr<ns3::NetDevice> GetDevice (std::size_t i) const override;
 };
 
-class UtopiaDevice : public ns3::NetDevice
+class AlohaDevice : public ns3::NetDevice
 {
 private:
-  ns3::Ptr<ns3::UniformRandomVariable> m_net_lev_delay;
-  ns3::EventId m_net_level_proc_event;
-  static const uint16_t MIN_US = 700;
-  static const uint16_t MAX_US = 1500;
 
-  ns3::Ptr<UtopiaChannel> m_channel; //!< the channel the device is connected to
+  enum class State
+  {
+    IDLE,
+    RX_STATE,
+    TX_STATE
+  };
+
+  ns3::Ptr<AlohaChannel> m_channel; //!< the channel the device is connected to
   ns3::NetDevice::ReceiveCallback m_rxCallback; //!< Receive callback
   ns3::Ptr<ns3::Node> m_node; //!< Node this ns3::NetDevice is associated to
   uint16_t m_mtu;   //!< MTU
   uint32_t m_ifIndex; //!< Interface index
   ns3::Mac8Address m_address; //!< MAC address
   ns3::Ptr<ns3::ErrorModel> m_receiveErrorModel; //!< Receive error model.
-
-  static const uint16_t RESEND_TIMEOUT_MS = 200;
-  ns3::Time m_resend_timeout;
-  std::map<uint8_t, ns3::EventId> m_resend_by_timeout_events;
-  uint8_t m_send_seq_cnter;
-  uint8_t m_expect_seq_cnter;
-  uint8_t m_ack_expected_cnter;
-  uint8_t m_go_back_n;
-  uint8_t MAX_SEQ;
-  uint8_t m_n_buffered;
-
-  bool m_upper_level_locked;
   ns3::TracedCallback<ns3::Ptr<const ns3::Packet> > m_phyRxDropTrace;
 
   void TransmitComplete (ns3::Ptr<ns3::Packet> p, uint16_t protocol);
 
-  //bool m_linkUp; //!< Flag indicating whether or not the link is up
-  //ns3::Ptr<ns3::Queue<ns3::Packet> > m_tx_queue; //!< The Queue for outgoing packets.
-  std::vector<std::pair<ns3::Ptr<ns3::Packet>, ns3::EventId > > m_buffer;
+  bool m_linkUp; //!< Flag indicating whether or not the link is up
   ns3::DataRate m_bps; //!< The device nominal Data rate. Zero means infinite
   ns3::EventId TransmitCompleteEvent; //!< the Tx Complete event
 
+  ns3::Ptr<ns3::MobilityModel> m_mob;
+  double m_tx_power;
+  double m_rx_sense;
 
-  //TracedCallback<> m_linkChangeCallbacks;
+  void receive_complete(ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from, ns3::Mac8Address to);
 
-  void timeout_event(uint8_t seq_num, uint16_t protocolNumber);
-
-  bool in_between(uint8_t a, uint8_t b, uint8_t c) const;
-
-  bool send_packet_internal(uint8_t ack, uint8_t seq, UtopiaMacHeader::frame_kind kind, ns3::Ptr<ns3::Packet> p, uint16_t prot);
-  bool send_packet_internal(ns3::Ptr<ns3::Packet> p, uint16_t prot);
-
-  inline void incr(uint8_t& i);
-  inline uint8_t wrap(uint8_t i);
+  State m_state;
 
 public:
 
-  void SetGoBackN(uint8_t n);
-
-  const static uint16_t UTOPIA_MTU;
+  const static uint16_t Aloha_MTU = 128;
 
   static ns3::TypeId GetTypeId (void);
-  UtopiaDevice ();
-  virtual ~UtopiaDevice();
+  AlohaDevice ();
+  virtual ~AlohaDevice();
 
-  void Receive (ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from);
+  ns3::Ptr<const ns3::MobilityModel> GetNodeMobilityModel() const;
 
-  void SetChannel (ns3::Ptr<UtopiaChannel> channel);
+  void Receive (ns3::Ptr<ns3::Packet> packet, uint16_t protocol, ns3::Mac8Address from, ns3::Mac8Address to);
 
-  //void SetQueue (ns3::Ptr<ns3::Queue<ns3::Packet> > queue);
-
-  //ns3::Ptr<ns3::Queue<ns3::Packet> > GetQueue (void) const;
+  void SetChannel (ns3::Ptr<AlohaChannel> channel);
 
   void SetReceiveErrorModel (ns3::Ptr<ns3::ErrorModel> em);
 
@@ -179,4 +164,7 @@ protected:
   virtual void DoDispose (void);
 };
 
-#endif // UTOPIAMAC1_H
+
+
+
+#endif // ALOHA_H
