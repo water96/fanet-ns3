@@ -3,6 +3,7 @@
 #include "ns3/node.h"
 #include "ns3/names.h"
 #include "ns3/packet.h"
+#include "ns3/string.h"
 #include "ns3/simulator.h"
 #include "ns3/node-container.h"
 #include "ns3/net-device-container.h"
@@ -82,14 +83,20 @@ int main()
   ns3::YansWavePhyHelper wifi_phy = ns3::YansWavePhyHelper::Default();
   ns3::YansWifiChannelHelper wifi_ch = ns3::YansWifiChannelHelper::Default();
   wifi_phy.SetChannel(wifi_ch.Create());
+  wifi_phy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11);
   ns3::NqosWaveMacHelper wifi_mac = ns3::NqosWaveMacHelper::Default();
   ns3::Wifi80211pHelper wifi_helper = ns3::Wifi80211pHelper::Default();
 
   wifi_helper.EnableLogComponents();
 
+  wifi_helper.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                      "DataMode", StringValue ("OfdmRate6MbpsBW10MHz"),
+                                      "ControlMode", StringValue ("OfdmRate6MbpsBW10MHz"));
+
   ns3::NetDeviceContainer infs = wifi_helper.Install(wifi_phy, wifi_mac, nodes);
 
-  wifi_phy.EnablePcap("80211p-", infs);
+  wifi_phy.EnablePcapAll("80211p-");
+  wifi_phy.EnableAsciiAll("80211p-tr");
 
   //Mobility
   ns3::MobilityHelper mobility;
@@ -109,8 +116,6 @@ int main()
   internet.Install(nodes);
 
   uint8_t cnter = 1;
-  ns3::Ipv4AddressHelper ipv4;
-  ns3::Ipv4InterfaceContainer ifs;
   for(auto it = nodes.Begin(); it != nodes.End(); it++)
   {
     char buf[30];
@@ -122,12 +127,12 @@ int main()
     sprintf(buf, "%x", cnter);
     ns3::Names::Add("node", std::string(buf), n);
 
-    sprintf(buf, "10.0.%d.0", cnter);
-    ipv4.SetBase(buf, "255.255.255.0");
-    auto tmp = ipv4.Assign(ns3::NetDeviceContainer(wdev));
-    ifs.Add(tmp);
     cnter++;
   }
+
+  ns3::Ipv4AddressHelper ipv4;
+  ipv4.SetBase("10.0.0.0", "255.255.255.0");
+  ns3::Ipv4InterfaceContainer ifs = ipv4.Assign(infs);
 
   node_id snder {nodes.Get(0), infs.Get(0), ifs.Get(0)};
   node_id rcver {nodes.Get(1), infs.Get(1), ifs.Get(1)};
@@ -147,14 +152,11 @@ int main()
   source->SetAllowBroadcast (true);
   source->Connect (remote);
 
-//  ns3::Ptr<ns3::Ipv4StaticRouting> rt = ns3::DynamicCast<ns3::Ipv4StaticRouting>(snder.l3.first->GetRoutingProtocol());
-//  rt->AddNetworkRouteTo(a.GetLocal().CombineMask(a.GetMask()), a.GetMask(), a.GetLocal(), snder.l3.second);
-
   ns3::AsciiTraceHelper tr;
   ns3::Ptr<ns3::OutputStreamWrapper> wr = tr.CreateFileStream(Names::FindName(snder.n) + "-node.rt");
   routing.PrintRoutingTableAt(MilliSeconds(1), snder.n, wr);
 
-  const ns3::Time period = ns3::MilliSeconds(3);
+  const ns3::Time period = ns3::MilliSeconds(1000);
   const uint32_t pckts = 100;
   const uint32_t pckt_size = 700;
 

@@ -1,0 +1,385 @@
+#include "adhoc.h"
+
+#include "ns3/mobility-module.h"
+#include "ns3/aodv-module.h"
+#include "ns3/olsr-module.h"
+#include "ns3/dsdv-module.h"
+#include "ns3/dsr-module.h"
+#include "ns3/applications-module.h"
+
+using namespace ns3;
+
+
+RoutingStats::RoutingStats ()
+  : m_RxBytes (0),
+    m_cumulativeRxBytes (0),
+    m_RxPkts (0),
+    m_cumulativeRxPkts (0),
+    m_TxBytes (0),
+    m_cumulativeTxBytes (0),
+    m_TxPkts (0),
+    m_cumulativeTxPkts (0)
+{
+}
+
+uint32_t
+RoutingStats::GetRxBytes ()
+{
+  return m_RxBytes;
+}
+
+uint32_t
+RoutingStats::GetCumulativeRxBytes ()
+{
+  return m_cumulativeRxBytes;
+}
+
+uint32_t
+RoutingStats::GetRxPkts ()
+{
+  return m_RxPkts;
+}
+
+uint32_t
+RoutingStats::GetCumulativeRxPkts ()
+{
+  return m_cumulativeRxPkts;
+}
+
+void
+RoutingStats::IncRxBytes (uint32_t rxBytes)
+{
+  m_RxBytes += rxBytes;
+  m_cumulativeRxBytes += rxBytes;
+}
+
+void
+RoutingStats::IncRxPkts ()
+{
+  m_RxPkts++;
+  m_cumulativeRxPkts++;
+}
+
+void
+RoutingStats::SetRxBytes (uint32_t rxBytes)
+{
+  m_RxBytes = rxBytes;
+}
+
+void
+RoutingStats::SetRxPkts (uint32_t rxPkts)
+{
+  m_RxPkts = rxPkts;
+}
+
+uint32_t
+RoutingStats::GetTxBytes ()
+{
+  return m_TxBytes;
+}
+
+uint32_t
+RoutingStats::GetCumulativeTxBytes ()
+{
+  return m_cumulativeTxBytes;
+}
+
+uint32_t
+RoutingStats::GetTxPkts ()
+{
+  return m_TxPkts;
+}
+
+uint32_t
+RoutingStats::GetCumulativeTxPkts ()
+{
+  return m_cumulativeTxPkts;
+}
+
+void
+RoutingStats::IncTxBytes (uint32_t txBytes)
+{
+  m_TxBytes += txBytes;
+  m_cumulativeTxBytes += txBytes;
+}
+
+void
+RoutingStats::IncTxPkts ()
+{
+  m_TxPkts++;
+  m_cumulativeTxPkts++;
+}
+
+void
+RoutingStats::SetTxBytes (uint32_t txBytes)
+{
+  m_TxBytes = txBytes;
+}
+
+void
+RoutingStats::SetTxPkts (uint32_t txPkts)
+{
+  m_TxPkts = txPkts;
+}
+
+
+/*
+ * ====================================================
+ */
+
+const double RoutingHelper::TOTAL_SIM_TIME = 300.01;
+const uint16_t RoutingHelper::PORT = 9;
+
+TypeId
+RoutingHelper::GetTypeId (void)
+{
+  static TypeId tid = TypeId ("ns3::RoutingHelper")
+    .SetParent<Object> ()
+    .AddConstructor<RoutingHelper> ();
+  return tid;
+}
+
+RoutingHelper::RoutingHelper ()
+  : m_TotalSimTime (TOTAL_SIM_TIME),
+    m_protocol (ROUTING_PROTOCOL::NONE),
+    m_port (PORT),
+    m_nSinks (0),
+    m_routingTables (1),
+    m_log (0)
+{
+}
+
+RoutingHelper::~RoutingHelper ()
+{
+}
+
+void
+RoutingHelper::Install (NodeContainer & c,
+                        NetDeviceContainer & d,
+                        Ipv4InterfaceContainer & i,
+                        double totalTime,
+                        ROUTING_PROTOCOL protocol,
+                        uint32_t nSinks,
+                        int routingTables)
+{
+  m_TotalSimTime = totalTime;
+  m_protocol = protocol;
+  m_nSinks = nSinks;
+  m_routingTables = routingTables;
+
+  SetupRoutingProtocol (c);
+  AssignIpAddresses (d, i);
+  SetupRoutingMessages (c, i);
+}
+
+Ptr<Socket>
+RoutingHelper::SetupRoutingPacketReceive (Ipv4Address addr, Ptr<Node> node)
+{
+  TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
+  Ptr<Socket> sink = Socket::CreateSocket (node, tid);
+  InetSocketAddress local = InetSocketAddress (addr, m_port);
+  sink->Bind (local);
+  sink->SetRecvCallback (MakeCallback (&RoutingHelper::ReceiveRoutingPacket, this));
+
+  return sink;
+}
+
+void
+RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
+{
+  Ipv4RoutingHelper* routing = nullptr;
+  const uint16_t prior = 100;
+
+  Ipv4ListRoutingHelper list;
+  InternetStackHelper internet;
+
+  Time rtt = Time (5.0);
+  AsciiTraceHelper ascii;
+
+  switch (m_protocol)
+    {
+      case ROUTING_PROTOCOL::NONE:
+        m_protocolName = "NONE";
+      break;
+      case ROUTING_PROTOCOL::OLSR:
+        routing = new OlsrHelper;
+        m_protocolName = "OLSR";
+      break;
+      case ROUTING_PROTOCOL::AODV:
+        routing = new AodvHelper;
+        m_protocolName = "AODV";
+      break;
+      case ROUTING_PROTOCOL::DSDV:
+        routing = new DsdvHelper;
+        m_protocolName = "DSDV";
+      break;
+      case ROUTING_PROTOCOL::DSR:
+        DsrHelper dsr;
+        DsrMainHelper dsrMain;
+        dsrMain.Install (dsr, c);
+        m_protocolName = "DSR";
+      break;
+    }
+
+  if(routing)
+  {
+    if (m_routingTables != 0)
+    {
+      for (auto it = c.Begin(); it != c.End(); it++)
+      {
+        std::string n_name = Names::FindName(*it);
+        if(n_name.empty())
+        {
+          n_name = "node-" + std::to_string((*it)->GetId());
+        }
+        Ptr<OutputStreamWrapper> rtw = ascii.CreateFileStream (n_name + ".rt");
+        routing->PrintRoutingTableEvery(Seconds(1.0), *it, rtw);
+      }
+
+    }
+    list.Add(*routing, prior);
+    internet.SetRoutingHelper (list);
+    delete routing;
+  }
+
+  internet.Install (c);
+
+  internet.EnablePcapIpv4All("ip-pcap");
+  internet.EnableAsciiIpv4All("ip-ascii");
+
+  if (m_log != 0)
+    {
+      NS_LOG_UNCOND ("Routing Setup for " << m_protocolName);
+    }
+}
+
+void
+RoutingHelper::AssignIpAddresses (NetDeviceContainer & d,
+                                  Ipv4InterfaceContainer & adhocTxInterfaces)
+{
+  NS_LOG_INFO ("Assigning IP addresses");
+  Ipv4AddressHelper addressAdhoc;
+  // we may have a lot of nodes, and want them all
+  // in same subnet, to support broadcast
+  NS_LOG_INFO ("Calculate mask:");
+
+  addressAdhoc.SetBase ("10.0.1.0", "255.255.255.0");
+
+  adhocTxInterfaces = addressAdhoc.Assign (d);
+  uint16_t cntr = 1;
+  for(auto it = adhocTxInterfaces.Begin(); it != adhocTxInterfaces.End(); it++)
+  {
+    Ptr<Ipv4> ip = it->first;
+
+    std::string n = Names::FindName(ip->GetNetDevice(it->second)->GetNode());
+    if(n.empty() == false)
+    {
+      std::size_t s = n.find_last_of('-');
+      if(s != std::string::npos)
+      {
+        n = n.substr(s + 1, n.size() - s);
+      }
+    }
+    else
+    {
+      n = std::to_string(cntr);
+    }
+
+    std::string a = "10.0.1." + n;
+    Ipv4InterfaceAddress addr(Ipv4Address(a.c_str()), Ipv4Mask(0xFFFFFF00));
+    ip->RemoveAddress(it->second, 0);
+    ip->AddAddress(it->second, addr);
+
+    cntr++;
+  }
+}
+
+void
+RoutingHelper::SetupRoutingMessages (NodeContainer & c,
+                                     Ipv4InterfaceContainer & adhocTxInterfaces)
+{
+  /*
+  // Setup routing transmissions
+  OnOffHelper onoff1 ("ns3::UdpSocketFactory", Address ());
+  onoff1.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"));
+  onoff1.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
+
+  Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
+  int64_t stream = 2;
+  var->SetStream (stream);
+  for (uint32_t i = 0; i < m_nSinks; i++)
+  {
+    // protocol == 0 means no routing data, WAVE BSM only
+    // so do not set up sink
+    if (m_protocol != ROUTING_PROTOCOL::NONE)
+      {
+        Ptr<Socket> sink = SetupRoutingPacketReceive (adhocTxInterfaces.GetAddress (i), c.Get (i));
+      }
+
+    AddressValue remoteAddress (InetSocketAddress (adhocTxInterfaces.GetAddress (i), m_port));
+    onoff1.SetAttribute ("Remote", remoteAddress);
+
+    ApplicationContainer temp = onoff1.Install (c.Get (i + m_nSinks));
+    temp.Start (Seconds (var->GetValue (1.0, 2.0)));
+    temp.Stop (Seconds (m_TotalSimTime));
+  }
+  */
+}
+
+static inline std::string
+PrintReceivedRoutingPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address srcAddress)
+{
+  std::ostringstream oss;
+
+  oss << Simulator::Now ().GetSeconds () << " " << socket->GetNode ()->GetId ();
+
+  if (InetSocketAddress::IsMatchingType (srcAddress))
+    {
+      InetSocketAddress addr = InetSocketAddress::ConvertFrom (srcAddress);
+      oss << " received one packet from " << addr.GetIpv4 ();
+    }
+  else
+    {
+      oss << " received one packet!";
+    }
+  return oss.str ();
+}
+
+void
+RoutingHelper::ReceiveRoutingPacket (Ptr<Socket> socket)
+{
+  Ptr<Packet> packet;
+  Address srcAddress;
+  while ((packet = socket->RecvFrom (srcAddress)))
+    {
+      // application data, for goodput
+      uint32_t RxRoutingBytes = packet->GetSize ();
+      GetRoutingStats ().IncRxBytes (RxRoutingBytes);
+      GetRoutingStats ().IncRxPkts ();
+      if (m_log != 0)
+        {
+          NS_LOG_UNCOND (m_protocolName + " " + PrintReceivedRoutingPacket (socket, packet, srcAddress));
+        }
+    }
+}
+
+void
+RoutingHelper::OnOffTrace (std::string context, Ptr<const Packet> packet)
+{
+  uint32_t pktBytes = packet->GetSize ();
+  routingStats.IncTxBytes (pktBytes);
+}
+
+RoutingStats &
+RoutingHelper::GetRoutingStats ()
+{
+  return routingStats;
+}
+
+void
+RoutingHelper::SetLogging (int log)
+{
+  m_log = log;
+}
+
+

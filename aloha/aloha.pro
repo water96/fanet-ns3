@@ -34,7 +34,8 @@ unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ \
                     -l$$(NS3VER)-wifi-debug \
                     -l$$(NS3VER)-mobility-debug \
                     -l$$(NS3VER)-netanim-debug \
-                    -l$$(NS3VER)-wave-debug
+                    -l$$(NS3VER)-wave-debug \
+                    -l$$(NS3VER)-aodv-debug
 
 message ($$LIBS)
 

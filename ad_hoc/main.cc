@@ -20,63 +20,31 @@
 #include "ns3/point-to-point-helper.h"
 
 #include "utils/tracers.h"
+#include "fanetrouting.h"
 
 using namespace ns3;
 
-const std::string delim_str = "\n====================================\n";
-
-void PosPrinter(ns3::NodeContainer& all_nodes)
-{
-  for(auto n = all_nodes.Begin (); n != all_nodes.End (); n++)
-  {
-    std::cout << "Node ID: " << (*n)->GetId () << std::endl;
-    std::cout << "Mobility model: " << (*n)->GetObject<ns3::MobilityModel>()->GetTypeId ().GetName () << std::endl;
-    std::cout << "Initila position: " << (*n)->GetObject<ns3::MobilityModel>()->GetPosition () << std::endl;
-    std::cout << delim_str;
-  }
-}
-
-int main()
+int main(int argc, char **argv)
 {
   //=====================================
-  LogComponentEnableAll (LogLevel::LOG_ALL);
-  //=====================================
-  uint8_t n_nodes = 4;
-  double x_lim = 100;
-  double y_lim = 100;
-  double speed = 10;
-  double sim_time = 10.0f;
+  //LogComponentEnableAll (LogLevel::LOG_ALL);
   //=====================================
 
-  //=====================================
-  ns3::NodeContainer all_nodes;
-  all_nodes.Create (n_nodes);
-  //=====================================
+  //Redirect all output to file
+  std::streambuf* old = std::cout.rdbuf();
+  std::ofstream f_cout("fanet-routing-сout.log");
+  std::ofstream f_clog("fanet-routing-сlog.log");
+  std::cout.rdbuf(f_cout.rdbuf());
+  std::clog.rdbuf(f_clog.rdbuf());
+
+  std::cout << "test!\n";
 
   //=====================================
-  ns3::MobilityHelper mob_hlpr;
-  mob_hlpr.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mob_hlpr.SetPositionAllocator ("ns3::RandomRectanglePositionAllocator",
-                                 "X", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=" + std::to_string (x_lim) + "]"),
-                                 "Y", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=" + std::to_string (y_lim) + "]"));
-  mob_hlpr.Install (all_nodes);
-  for(auto n = all_nodes.Begin (); n != all_nodes.End (); n++)
-  {
-    std::cout << "Node ID: " << (*n)->GetId () << std::endl;
-    std::cout << "Mobility model: " << (*n)->GetObject<ns3::MobilityModel>()->GetInstanceTypeId ().GetName () << std::endl;
-    std::cout << "Initila position: " << (*n)->GetObject<ns3::MobilityModel>()->GetPosition () << std::endl;
-    std::cout << delim_str;
-  }
-  //=====================================
 
-  //=====================================
-  ns3::AnimationInterface anim("ad_hoc.xml");
-  //=====================================
+  FanetRoutingExperiment exp;
+  exp.Simulate(argc, argv);
 
-  //=====================================
-  //ns3::EventId p_id = Simulator::Schedule (Seconds (0.0),&PosPrinter, all_nodes);
-  Simulator::Run ();
-  Simulator::Destroy ();
-  //=====================================
+  f_cout.close();
+  f_clog.close();
   return 0;
 }
