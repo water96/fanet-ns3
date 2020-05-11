@@ -22,7 +22,7 @@
 #include "ns3/animation-interface.h"
 #include "ns3/point-to-point-helper.h"
 #include "ns3/wifi-module.h"
-
+#include "ns3/ip-l4-protocol.h"
 
 class TracerBase
 {
@@ -45,11 +45,10 @@ public:
 class DistanceCalculatorAndTracer : public TracerBase
 {
 private:
-  //std::vector<ns3::Ptr<ns3::MobilityModel> > nodes_mobility;
   ns3::Ptr<ns3::MobilityModel> m_target;
 public:
   DistanceCalculatorAndTracer() {}
-  void SetNodesMobilityModel(ns3::Ptr<ns3::MobilityModel> t/*, const ns3::NodeContainer& c*/)
+  void SetNodeMobilityModel(ns3::Ptr<ns3::MobilityModel> t)
   {
     m_target = t;
   }
@@ -58,13 +57,11 @@ public:
   {
     TracerBase::CreateOutput(name);
 
-    TracerBase::m_out << "time,"
-                     << "p_x,"
-                     << "p_y,"
-                     << "p_z,"
-                     << "v_x,"
-                     << "v_y,"
-                     << "v_z"
+    TracerBase::m_out << "time,\t"
+                     << "px,\t"
+                     << "py,\t"
+                     << "pz,\t"
+                     << "v"
                      << std::endl;
   }
 
@@ -73,14 +70,65 @@ public:
     ns3::Vector pos = m_target->GetPosition (); // Get position
     ns3::Vector vel = m_target->GetVelocity (); // Get velocity
 
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds() << ","
-                      << pos.x << ","
-                      << pos.y << ","
-                      << pos.z << ","
-                      << vel.x << ","
-                      << vel.y << ","
-                      << vel.z << std::endl;
+    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds() << ",\t"
+                      << pos.x << ",\t"
+                      << pos.y << ",\t"
+                      << pos.z << ",\t"
+                      << vel.GetLength() << std::endl;
     ns3::Simulator::Schedule(ns3::Seconds(next), &DistanceCalculatorAndTracer::DumperCb, this, next);
+  }
+};
+
+class AllNodesMobilityTracer : public TracerBase
+{
+private:
+  std::map<std::string, ns3::Ptr<ns3::MobilityModel> > m_nodes_mobility;
+public:
+  AllNodesMobilityTracer() {}
+  void AddNodeMobilityModel(ns3::Ptr<ns3::MobilityModel> t, std::string n_id)
+  {
+    if(m_nodes_mobility.find(n_id) != m_nodes_mobility.end())
+    {
+      return;
+    }
+
+    m_nodes_mobility.insert(std::make_pair(n_id, t));
+  }
+
+  void CreateOutput(const std::string& name)
+  {
+    TracerBase::CreateOutput(name);
+
+    TracerBase::m_out << "time";
+
+    for(auto& it : m_nodes_mobility)
+    {
+      TracerBase::m_out << ",\tpx" << it.first
+                        << ",\tpy" << it.first
+                        << ",\tpz" << it.first
+                        << ",\tv" << it.first;
+    }
+
+    TracerBase::m_out << std::endl;
+  }
+
+  void DumperCb(double next)
+  {
+    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds();
+
+    for(auto& it : m_nodes_mobility)
+    {
+      ns3::Vector pos = it.second->GetPosition(); // Get position
+      ns3::Vector vel = it.second->GetVelocity (); // Get velocity
+
+      TracerBase::m_out << ",\t" << pos.x
+                        << ",\t" << pos.y
+                        << ",\t" << pos.z
+                        << ",\t" << vel.GetLength();
+    }
+    TracerBase::m_out << std::endl;
+
+    ns3::Simulator::Schedule(ns3::Seconds(next), &AllNodesMobilityTracer::DumperCb, this, next);
   }
 };
 
@@ -173,7 +221,6 @@ public:
     TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << ",\t" << rtt.GetSeconds () << std::endl;
   }
 };
-
 
 class ArpTracer : public TracerBase
 {
@@ -280,6 +327,125 @@ public:
         << "\"" << m.GetUniqueName() << "\"" << ",\t"
         << static_cast<uint32_t>(pr) << ",\t"
         << static_cast<uint32_t>(hz)
+        << std::endl;
+  }
+};
+
+class Ipv4L3ProtocolTracer : public TracerBase
+{
+private:
+  std::map<std::string, std::ofstream> m_cb_out_map;
+  std::map<std::string, std::string> m_cb_name_to_hdr_map;
+public:
+  Ipv4L3ProtocolTracer()
+  {
+    std::string ss;
+
+    //ss = "Time,\tpckt_id,\tsnr,\tmode_id,\tpreamb";
+    m_cb_name_to_hdr_map.insert(std::make_pair("Tx", ss));
+
+    //ss = "Time,\tpckt_id,\tsnr";
+    m_cb_name_to_hdr_map.insert(std::make_pair("Rx", ss));
+
+    //ss = "Time,\tpckt_id,\tsnr";
+    m_cb_name_to_hdr_map.insert(std::make_pair("Drop", ss));
+
+    //ss = "Time,\tpckt_id,\tmode_id,\tpreamb,\tpw";
+    m_cb_name_to_hdr_map.insert(std::make_pair("UnicastForward", ss));
+
+    //ss = "Time,\tpckt_id,\tmode_id,\tpreamb,\tpw";
+    m_cb_name_to_hdr_map.insert(std::make_pair("LocalDeliver", ss));
+  }
+
+  ~Ipv4L3ProtocolTracer()
+  {
+    for(auto& it : m_cb_out_map)
+    {
+      it.second.close();
+    }
+  }
+  void CreateOutput(const std::string& post_fix)
+  {
+    for(auto& it : m_cb_name_to_hdr_map)
+    {
+      m_cb_out_map.insert(std::make_pair(it.first, std::ofstream(it.first + "-" + post_fix)));
+      m_cb_out_map.at(it.first) << it.second << std::endl;
+    }
+  }
+
+  void TxCb(ns3::Ptr<const ns3::Packet> p, ns3::Ptr<ns3::Ipv4> ip,  uint32_t ifs)
+  {
+    std::ofstream& ofs = m_cb_out_map.at("Tx");
+
+    std::stringstream ss;
+    p->Print(ss);
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
+        << p->GetUid() << ",\t"
+        << p->GetSize() << ",\t"
+        << "\"" << ss.str() << "\""
+        << std::endl;
+  }
+
+  void RxCb(ns3::Ptr<const ns3::Packet> p, ns3::Ptr<ns3::Ipv4> ip,  uint32_t ifs)
+  {
+    std::ofstream& ofs = m_cb_out_map.at("Rx");
+
+    std::stringstream ss;
+    p->Print(ss);
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
+        << p->GetUid() << ",\t"
+        << p->GetSize() << ",\t"
+        << "\"" << ss.str() << "\""
+        << std::endl;
+  }
+
+  void DropCb(const ns3::Ipv4Header & ip_hdr, ns3::Ptr<const ns3::Packet> p, ns3::Ipv4L3Protocol::DropReason r, ns3::Ptr<ns3::Ipv4> ip, uint32_t ifs)
+  {
+    std::ofstream& ofs = m_cb_out_map.at("Drop");
+    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
+        << p->GetUid() << ",\t"
+        << p->GetSize() << ",\t"
+        << ip->IsDestinationAddress( ip_hdr.GetDestination(), ifs) << ",\t"
+        << static_cast<uint32_t>(r)
+        << std::endl;
+  }
+
+  void UnicastForwardCb(const ns3::Ipv4Header & ip_hdr, ns3::Ptr<const ns3::Packet> p, uint32_t ifs)
+  {
+    std::ofstream& ofs = m_cb_out_map.at("UnicastForward");
+
+    std::stringstream ssource;
+    ip_hdr.GetSource().Print(ssource);
+
+    std::stringstream sdst;
+    ip_hdr.GetDestination().Print(sdst);
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
+        << p->GetUid() << ",\t"
+        << p->GetSize() << ",\t"
+        << "\"" << ssource.str() << "\",\t"
+        << "\"" << sdst.str() << "\""
+        << std::endl;
+
+  }
+
+  void LocalDeliverCb(const ns3::Ipv4Header & ip_hdr, ns3::Ptr<const ns3::Packet> p, uint32_t ifs)
+  {
+    std::ofstream& ofs = m_cb_out_map.at("LocalDeliver");
+
+    std::stringstream ssource;
+    ip_hdr.GetSource().Print(ssource);
+
+    std::stringstream sdst;
+    ip_hdr.GetDestination().Print(sdst);
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
+        << p->GetUid() << ",\t"
+        << p->GetSize() << ",\t"
+        << "\"" << ssource.str() << "\",\t"
+        << "\"" << sdst.str() << "\""
         << std::endl;
   }
 };

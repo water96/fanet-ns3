@@ -188,6 +188,7 @@ void
 RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
 {
   Ipv4RoutingHelper* routing = nullptr;
+  Ptr<Ipv4RoutingProtocol> prot;
   const uint16_t prior = 100;
 
   Ipv4ListRoutingHelper list;
@@ -207,6 +208,8 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
       break;
       case ROUTING_PROTOCOL::AODV:
         routing = new AodvHelper;
+        //prot = routing->GetRouting<ns3::aodv::RoutingProtocol>(prot);
+        //prot->SetAttribute("EnableHello", BooleanValue(false));
         m_protocolName = "AODV";
       break;
       case ROUTING_PROTOCOL::DSDV:
@@ -298,32 +301,7 @@ void
 RoutingHelper::SetupRoutingMessages (NodeContainer & c,
                                      Ipv4InterfaceContainer & adhocTxInterfaces)
 {
-  /*
-  // Setup routing transmissions
-  OnOffHelper onoff1 ("ns3::UdpSocketFactory", Address ());
-  onoff1.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"));
-  onoff1.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
 
-  Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
-  int64_t stream = 2;
-  var->SetStream (stream);
-  for (uint32_t i = 0; i < m_nSinks; i++)
-  {
-    // protocol == 0 means no routing data, WAVE BSM only
-    // so do not set up sink
-    if (m_protocol != ROUTING_PROTOCOL::NONE)
-      {
-        Ptr<Socket> sink = SetupRoutingPacketReceive (adhocTxInterfaces.GetAddress (i), c.Get (i));
-      }
-
-    AddressValue remoteAddress (InetSocketAddress (adhocTxInterfaces.GetAddress (i), m_port));
-    onoff1.SetAttribute ("Remote", remoteAddress);
-
-    ApplicationContainer temp = onoff1.Install (c.Get (i + m_nSinks));
-    temp.Start (Seconds (var->GetValue (1.0, 2.0)));
-    temp.Stop (Seconds (m_TotalSimTime));
-  }
-  */
 }
 
 static inline std::string

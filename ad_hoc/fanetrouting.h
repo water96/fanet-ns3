@@ -30,18 +30,16 @@ protected:
 private:
 
   //callbacks
-
   std::vector<DistanceCalculatorAndTracer*> m_dist_calc_trace;
   std::vector<PingTracer*> m_ping_trace;
-  std::vector<ArpTracer*> m_arp_tracers;
   std::vector<WifiPhyTracer*> m_wifi_phy_tracers;
   std::vector<WifiPhyStateTracer*> m_wifi_state_tracers;
+  std::vector<Ipv4L3ProtocolTracer*> m_ipv4_tracers;
 
+  AllNodesMobilityTracer m_all_nodes_mobility_trace;
   //============================
 
   void EnableLogComponent();
-  void CheckThroughput();
-
 
   std::string m_CSVfileName;
   uint16_t m_port; ///< port

@@ -19,16 +19,11 @@
 #include <map>
 using namespace ns3;
 
-static void
-CourseChange (std::ostream *os, std::string context, Ptr<const MobilityModel> mobility);
-
-
 FanetRoutingExperiment::FanetRoutingExperiment()
-  : m_CSVfileName("fanet-routing-exp.csv"),
-    m_total_sim_time(200.0),
+  : m_total_sim_time(200.0),
     m_port (9),
     m_nsinks (1),
-    m_txp (50),
+    m_txp (40),
     m_traceMobility (true),
     // AODV
     m_protocol (2),
@@ -72,11 +67,6 @@ FanetRoutingExperiment::~FanetRoutingExperiment()
     delete it;
   }
 
-  for(auto it : m_arp_tracers)
-  {
-    delete it;
-  }
-
   for(auto it : m_wifi_phy_tracers)
   {
     delete it;
@@ -87,17 +77,17 @@ FanetRoutingExperiment::~FanetRoutingExperiment()
     delete it;
   }
 
+  for(auto it : m_ipv4_tracers)
+  {
+    delete it;
+  }
+
 }
 
 void
 FanetRoutingExperiment::SetDefaultAttributeValues ()
 {
-  // handled in constructor
-  Config::SetDefault ("ns3::OnOffApplication::PacketSize", StringValue ("64"));
-  Config::SetDefault ("ns3::OnOffApplication::DataRate", StringValue (m_rate));
-
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue (m_phyMode));
-
 }
 
 void
@@ -250,25 +240,6 @@ void FanetRoutingExperiment::ConfigureMobility ()
       node_mob->SetPosition(initial_pos->GetNext());
     }
   }
-
-  Config::Connect ("/NodeList/*/$ns3::MobilityModel/CourseChange",
-                   MakeBoundCallback (CourseChange, &m_os));
-}
-
-void
-CourseChange (std::ostream *os, std::string context, Ptr<const MobilityModel> mobility)
-{
-  Vector pos = mobility->GetPosition (); // Get position
-  Vector vel = mobility->GetVelocity (); // Get velocity
-
-  std::string node_name = Names::FindName(mobility->GetObject<Node>());
-
-  NS_LOG_UNCOND ("Changing pos for node=" << node_name << " at " << Simulator::Now () );
-
-  // Prints position and velocities
-  *os << Simulator::Now ().GetSeconds() << " POS: x=" << pos.x << ", y=" << pos.y
-      << ", z=" << pos.z << "; VEL:" << vel.x << ", y=" << vel.y
-      << ", z=" << vel.z << std::endl;
 }
 
 void FanetRoutingExperiment::ConfigureApplications ()
@@ -282,6 +253,36 @@ void FanetRoutingExperiment::ConfigureApplications ()
                            m_nsinks,
                            m_print_routingTables);
 
+  //Ptr<Ipv4RoutingProtocol> routing_ptr =
+
+
+  switch (m_rout_prot)
+    {
+      case RoutingHelper::ROUTING_PROTOCOL::NONE:
+
+      break;
+      case RoutingHelper::ROUTING_PROTOCOL::OLSR:
+
+      break;
+      case RoutingHelper::ROUTING_PROTOCOL::AODV:
+
+        for(auto it = m_adhocTxNodes.Begin(); it != m_adhocTxNodes.End(); it++)
+        {
+          Ptr<Ipv4RoutingProtocol> routing = (*it)->GetObject<Ipv4RoutingProtocol>();
+          if(routing)
+          {
+            routing->SetAttribute("EnableHello", BooleanValue(false));
+          }
+        }
+
+      break;
+      case RoutingHelper::ROUTING_PROTOCOL::DSDV:
+
+      break;
+      case RoutingHelper::ROUTING_PROTOCOL::DSR:
+
+      break;
+    }
 
   Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
   var->SetStream(m_streamIndex);
@@ -294,6 +295,7 @@ void FanetRoutingExperiment::ConfigureApplications ()
   {
     V4PingHelper hlp(m_adhocTxInterfaces.GetAddress(i));
     hlp.SetAttribute("Verbose", BooleanValue(true));
+    hlp.SetAttribute("Interval", TimeValue(Seconds(1.0)));
     ApplicationContainer a = hlp.Install(node);
     a.Start(Seconds(var->GetValue(m_total_sim_time*0.1, m_total_sim_time*0.2)));
     a.Stop(Seconds(m_total_sim_time));
@@ -306,7 +308,6 @@ void FanetRoutingExperiment::ConfigureApplications ()
     m_ping_trace.push_back(tmp);
   }
 }
-
 
 void FanetRoutingExperiment::EnableLogComponent()
 {
@@ -343,36 +344,8 @@ void FanetRoutingExperiment::EnableLogComponent()
   Packet::EnablePrinting ();
 }
 
-void
-FanetRoutingExperiment::CheckThroughput ()
-{
-  uint32_t bytesTotal = m_routingHelper->GetRoutingStats ().GetRxBytes ();
-  uint32_t packetsReceived = m_routingHelper->GetRoutingStats ().GetRxPkts ();
-  double kbps = (bytesTotal * 8.0) / 1000;
-
-  std::ofstream out (m_CSVfileName.c_str (), std::ios::app);
-
-  if (m_log != 0 )
-  {
-  }
-
-  out << (Simulator::Now ()).GetSeconds () << ","
-      << kbps << ","
-      << packetsReceived << ","
-      << m_nsinks << ","
-      << static_cast<uint32_t>(m_rout_prot) << ","
-      << m_txp << ","
-      << std::endl;
-
-  out.close ();
-
-  Simulator::Schedule (Seconds (1.0), &FanetRoutingExperiment::CheckThroughput, this);
-}
-
-
 void FanetRoutingExperiment::ConfigureTracing ()
 {
-
   EnableLogComponent();
 
   AsciiTraceHelper ascii;
@@ -384,27 +357,6 @@ void FanetRoutingExperiment::ConfigureTracing ()
   //anim.EnableIpv4RouteTracking("anim_rt_tables.rt", Time(0), Seconds(m_total_sim_time), Seconds(1.0));
   //anim.EnableIpv4L3ProtocolCounters(Time(0), Seconds(m_total_sim_time));
 
-  // open log file for output
-  m_os.open (std::string(m_trName + ".log"));
-
-  //blank out the last output file and write the column headers
-  std::ofstream out (m_CSVfileName.c_str ());
-//  out << (Simulator::Now ()).GetSeconds () << ","
-//      << kbps << ","
-//      << packetsReceived << ","
-//      << m_nsinks << ","
-//      << static_cast<uint32_t>(m_rout_prot) << ","
-//      << m_txp << ","
-//      << std::endl;
-  out << "SimulationSecond," <<
-    "ReceiveRate," <<
-    "PacketsReceived," <<
-    "NumberOfSinks," <<
-    "RoutingProtocol," <<
-    "TransmissionPower" <<
-    std::endl;
-  out.close ();
-
 
   PointerValue tmp_ptr_val;
 
@@ -414,26 +366,19 @@ void FanetRoutingExperiment::ConfigureTracing ()
     Ptr<Node> n = *it;
     std::string n_name = Names::FindName(n);
 
-    //Arp
-    Ptr<ArpL3Protocol> arp_obj = n->GetObject<ArpL3Protocol>();
-    if(arp_obj)
-    {
-      ArpTracer* arp_tmp = new ArpTracer();
-      arp_tmp->CreateOutput(n_name + "-arp.csv");
-      arp_obj->TraceConnectWithoutContext("Drop", MakeCallback(&ArpTracer::ArpDropCb, arp_tmp));
-      m_arp_tracers.push_back(arp_tmp);
-    }
-    //=======================
-
     //Mobility
     Ptr<MobilityModel> node_mob = (n)->GetObject<MobilityModel>();
     if(node_mob)
     {
       DistanceCalculatorAndTracer* mob_tmp = new DistanceCalculatorAndTracer;
       mob_tmp->CreateOutput(n_name + "-mob.csv");
-      mob_tmp->SetNodesMobilityModel(node_mob);
+      mob_tmp->SetNodeMobilityModel(node_mob);
       ns3::Simulator::Schedule(Time(0.0), &DistanceCalculatorAndTracer::DumperCb, mob_tmp, m_total_sim_time / 100.0);
       m_dist_calc_trace.push_back(mob_tmp);
+
+      //add node to all mob trace
+      std::size_t s = n_name.find('-');
+      m_all_nodes_mobility_trace.AddNodeMobilityModel(node_mob, n_name.substr(s+1));
     }
     //=======================
 
@@ -462,8 +407,10 @@ void FanetRoutingExperiment::ConfigureTracing ()
       m_wifi_state_tracers.push_back(wifi_state_tracer);
     }
     //=======================
-
   }
+
+  m_all_nodes_mobility_trace.CreateOutput("all-nodes-mobs.csv");
+  ns3::Simulator::Schedule(Time(0.0), &AllNodesMobilityTracer::DumperCb, &m_all_nodes_mobility_trace, m_total_sim_time / 100.0);
 
   //Through devices
   for(auto it = m_adhocTxDevices.Begin(); it != m_adhocTxDevices.End(); it++)
@@ -472,14 +419,28 @@ void FanetRoutingExperiment::ConfigureTracing ()
   }
 
   //Through ip interaces
+  for(auto it = m_adhocTxInterfaces.Begin(); it != m_adhocTxInterfaces.End(); it++)
+  {
+    Ptr<Ipv4> ip = it->first;
+    std::string n_name = Names::FindName(ip->GetNetDevice(it->second)->GetNode());
+    Ipv4L3ProtocolTracer* tmp = new Ipv4L3ProtocolTracer();
+    tmp->CreateOutput("ipv4-" + n_name + ".csv");
+    ip->TraceConnectWithoutContext("Tx", MakeCallback(&Ipv4L3ProtocolTracer::TxCb, tmp));
+    ip->TraceConnectWithoutContext("Rx", MakeCallback(&Ipv4L3ProtocolTracer::RxCb, tmp));
+    ip->TraceConnectWithoutContext("Drop", MakeCallback(&Ipv4L3ProtocolTracer::DropCb, tmp));
+    ip->TraceConnectWithoutContext("UnicastForward", MakeCallback(&Ipv4L3ProtocolTracer::UnicastForwardCb, tmp));
+    ip->TraceConnectWithoutContext("LocalDeliver", MakeCallback(&Ipv4L3ProtocolTracer::LocalDeliverCb, tmp));
+    m_ipv4_tracers.push_back(tmp);
+  }
 
+  //GlobalTracers
+
+  //=======================
 }
 
 void FanetRoutingExperiment::RunSimulation ()
 {
   NS_LOG_INFO ("Run Simulation.");
-
-  CheckThroughput ();
 
   Simulator::Stop (Seconds (m_total_sim_time));
   Simulator::Run ();
@@ -497,7 +458,5 @@ void FanetRoutingExperiment::ProcessOutputs ()
   {
 
   }
-
-  m_os.close();
 }
 
