@@ -25,6 +25,7 @@ FanetRoutingExperiment::FanetRoutingExperiment()
     m_nsinks (1),
     m_txp (40),
     m_traceMobility (true),
+    m_traffic_apps(NetTrafficCreator::NetTrafficClasses::UDP_CBR),
     // AODV
     m_protocol (2),
     m_rout_prot(RoutingHelper::ROUTING_PROTOCOL::AODV),
@@ -32,13 +33,11 @@ FanetRoutingExperiment::FanetRoutingExperiment()
     m_lossModelName ("ns3::FriisPropagationLossModel"),
     m_phyMode ("OfdmRate6MbpsBW10MHz"),
     m_traceFile (""),
-    m_nNodes (3),
+    m_nNodes (2),
     m_rate ("2048bps"),
     m_trName ("fanet-routing-compare"),
     m_nodeSpeed (200),
     m_nodePause (0),
-    m_wavePacketSize (200),
-    m_waveInterval (0.1),
     m_verbose (0),
     m_print_routingTables (true),
     m_asciiTrace (1),
@@ -58,11 +57,6 @@ FanetRoutingExperiment::FanetRoutingExperiment()
 FanetRoutingExperiment::~FanetRoutingExperiment()
 {
   for(auto it : m_dist_calc_trace)
-  {
-    delete it;
-  }
-
-  for(auto it : m_ping_trace)
   {
     delete it;
   }
@@ -253,9 +247,6 @@ void FanetRoutingExperiment::ConfigureApplications ()
                            m_nsinks,
                            m_print_routingTables);
 
-  //Ptr<Ipv4RoutingProtocol> routing_ptr =
-
-
   switch (m_rout_prot)
     {
       case RoutingHelper::ROUTING_PROTOCOL::NONE:
@@ -284,29 +275,12 @@ void FanetRoutingExperiment::ConfigureApplications ()
       break;
     }
 
-  Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
-  var->SetStream(m_streamIndex);
+  m_traffic_creator.Create(m_traffic_apps, m_streamIndex, m_total_sim_time);
+  m_traffic_creator.Inst().Install(m_adhocTxNodes, m_adhocTxInterfaces);
 
-  auto src = m_adhocTxInterfaces.Get(0);
-  auto node = src.first->GetNetDevice(src.second)->GetNode();
-  std::string s = Names::FindName(node);
+//  Simulator::Schedule(Seconds(20.0), &Ipv4::SetDown, m_adhocTxInterfaces.Get(1).first, m_adhocTxInterfaces.Get(1).second);
+//  Simulator::Schedule(Seconds(27.0), &Ipv4::SetUp, m_adhocTxInterfaces.Get(1).first, m_adhocTxInterfaces.Get(1).second);
 
-  for(uint32_t i = 1; i < m_adhocTxInterfaces.GetN(); i++)
-  {
-    V4PingHelper hlp(m_adhocTxInterfaces.GetAddress(i));
-    hlp.SetAttribute("Verbose", BooleanValue(true));
-    hlp.SetAttribute("Interval", TimeValue(Seconds(1.0)));
-    ApplicationContainer a = hlp.Install(node);
-    a.Start(Seconds(var->GetValue(m_total_sim_time*0.1, m_total_sim_time*0.2)));
-    a.Stop(Seconds(m_total_sim_time));
-
-    auto tmp_node = m_adhocTxNodes.Get(i);
-    std::string s2 = Names::FindName(tmp_node);
-    PingTracer* tmp = new PingTracer();
-    tmp->CreateOutput("ping-" + s + "-to-" + s2 + ".csv");
-    a.Get(0)->TraceConnectWithoutContext("Rtt", MakeCallback(&PingTracer::RttPingCb, tmp));
-    m_ping_trace.push_back(tmp);
-  }
 }
 
 void FanetRoutingExperiment::EnableLogComponent()
@@ -352,6 +326,7 @@ void FanetRoutingExperiment::ConfigureTracing ()
   MobilityHelper::EnableAsciiAll (ascii.CreateFileStream (m_trName + ".mob"));
 
   //AnimationInterface anim ("animation.xml");  // where "animation.xml" is any arbitrary filenames
+  //anim.SetMobilityPollInterval(Seconds(1.0));
   //anim.EnableWifiMacCounters(Time(0), Seconds(m_total_sim_time));
   //anim.EnableWifiPhyCounters(Time(0), Seconds(m_total_sim_time));
   //anim.EnableIpv4RouteTracking("anim_rt_tables.rt", Time(0), Seconds(m_total_sim_time), Seconds(1.0));
@@ -373,7 +348,7 @@ void FanetRoutingExperiment::ConfigureTracing ()
       DistanceCalculatorAndTracer* mob_tmp = new DistanceCalculatorAndTracer;
       mob_tmp->CreateOutput(n_name + "-mob.csv");
       mob_tmp->SetNodeMobilityModel(node_mob);
-      ns3::Simulator::Schedule(Time(0.0), &DistanceCalculatorAndTracer::DumperCb, mob_tmp, m_total_sim_time / 100.0);
+      ns3::Simulator::Schedule(Time(0.0), &DistanceCalculatorAndTracer::DumperCb, mob_tmp, 1.0);
       m_dist_calc_trace.push_back(mob_tmp);
 
       //add node to all mob trace
@@ -410,7 +385,7 @@ void FanetRoutingExperiment::ConfigureTracing ()
   }
 
   m_all_nodes_mobility_trace.CreateOutput("all-nodes-mobs.csv");
-  ns3::Simulator::Schedule(Time(0.0), &AllNodesMobilityTracer::DumperCb, &m_all_nodes_mobility_trace, m_total_sim_time / 100.0);
+  ns3::Simulator::Schedule(Time(0.0), &AllNodesMobilityTracer::DumperCb, &m_all_nodes_mobility_trace, 1.0);
 
   //Through devices
   for(auto it = m_adhocTxDevices.Begin(); it != m_adhocTxDevices.End(); it++)
@@ -451,7 +426,7 @@ void FanetRoutingExperiment::RunSimulation ()
 void FanetRoutingExperiment::ProcessOutputs ()
 {
   double averageRoutingGoodputKbps = 0.0;
-  uint32_t totalBytesTotal = m_routingHelper->GetRoutingStats ().GetCumulativeRxBytes ();
+  uint32_t totalBytesTotal = m_routingHelper->GetStatsCollector ().GetCumulativeRxBytes ();
   averageRoutingGoodputKbps = (((double) totalBytesTotal * 8.0) / m_total_sim_time) / 1000.0;
 
   if (m_log != 0)

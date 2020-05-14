@@ -24,12 +24,55 @@
 #include "ns3/wifi-module.h"
 #include "ns3/ip-l4-protocol.h"
 
+
+class StatsCollector
+{
+public:
+  StatsCollector ();
+
+  uint32_t GetRxBytes ();
+  uint32_t GetCumulativeRxBytes ();
+  uint32_t GetRxPkts ();
+  uint32_t GetCumulativeRxPkts ();
+
+  void IncRxBytes (uint32_t rxBytes);
+  void IncRxPkts ();
+  void SetRxBytes (uint32_t rxBytes);
+  void SetRxPkts (uint32_t rxPkts);
+
+  uint32_t GetTxBytes ();
+  uint32_t GetCumulativeTxBytes ();
+  uint32_t GetTxPkts ();
+  uint32_t GetCumulativeTxPkts ();
+
+  void IncTxBytes (uint32_t txBytes);
+  void IncTxPkts ();
+  void SetTxBytes (uint32_t txBytes);
+  void SetTxPkts (uint32_t txPkts);
+
+private:
+  uint32_t m_RxBytes; ///< reeive bytes
+  uint32_t m_cumulativeRxBytes; ///< cumulative receive bytes
+  uint32_t m_RxPkts; ///< receive packets
+  uint32_t m_cumulativeRxPkts; ///< cumulative receive packets
+  uint32_t m_TxBytes; ///< transmit bytes
+  uint32_t m_cumulativeTxBytes; ///< cumulative transmit bytes
+  uint32_t m_TxPkts; ///< transmit packets
+  uint32_t m_cumulativeTxPkts; ///< cumulative transmit packets
+};
+
 class TracerBase
 {
 protected:
   std::ofstream m_out;
+  std::string   m_delimeter;
+  std::string   m_q;
 public:
-  TracerBase(){}
+  TracerBase()
+  {
+    m_delimeter = ",\t";
+    m_q = "\"";
+  }
   ~TracerBase()
   {
     if(m_out.is_open ())
@@ -70,10 +113,10 @@ public:
     ns3::Vector pos = m_target->GetPosition (); // Get position
     ns3::Vector vel = m_target->GetVelocity (); // Get velocity
 
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds() << ",\t"
-                      << pos.x << ",\t"
-                      << pos.y << ",\t"
-                      << pos.z << ",\t"
+    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds() << m_delimeter
+                      << pos.x << m_delimeter
+                      << pos.y << m_delimeter
+                      << pos.z << m_delimeter
                       << vel.GetLength() << std::endl;
     ns3::Simulator::Schedule(ns3::Seconds(next), &DistanceCalculatorAndTracer::DumperCb, this, next);
   }
@@ -121,10 +164,10 @@ public:
       ns3::Vector pos = it.second->GetPosition(); // Get position
       ns3::Vector vel = it.second->GetVelocity (); // Get velocity
 
-      TracerBase::m_out << ",\t" << pos.x
-                        << ",\t" << pos.y
-                        << ",\t" << pos.z
-                        << ",\t" << vel.GetLength();
+      TracerBase::m_out << m_delimeter << pos.x
+                        << m_delimeter << pos.y
+                        << m_delimeter << pos.z
+                        << m_delimeter << vel.GetLength();
     }
     TracerBase::m_out << std::endl;
 
@@ -218,7 +261,7 @@ public:
 
   void RttPingCb(ns3::Time rtt)
   {
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << ",\t" << rtt.GetSeconds () << std::endl;
+    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << m_delimeter << rtt.GetSeconds () << std::endl;
   }
 };
 
@@ -238,7 +281,7 @@ public:
 
   void ArpDropCb(ns3::Ptr<const ns3::Packet> p)
   {
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << ",\t" << p->GetUid() << std::endl;
+    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << m_delimeter << p->GetUid() << std::endl;
   }
 };
 
@@ -259,7 +302,7 @@ public:
 
   void WifiPhyDropCb(ns3::Ptr<const ns3::Packet> p, ns3::WifiPhyRxfailureReason reason)
   {
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << ",\t" << p->GetUid() << ",\t" << static_cast<uint32_t>(reason) << std::endl;
+    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << m_delimeter << p->GetUid() << m_delimeter << static_cast<uint32_t>(reason) << std::endl;
   }
 };
 
@@ -302,10 +345,10 @@ public:
   void RxOkCb(ns3::Ptr<const ns3::Packet> p, double d, ns3::WifiMode m, ns3::WifiPreamble pr)
   {
     std::ofstream& ofs = m_cb_out_map.at("RxOkCb");
-    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
-        << p->GetUid() << ",\t"
-        << d << ",\t"
-        << "\"" << m.GetUniqueName() << "\"" << ",\t"
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid() << m_delimeter
+        << d << m_delimeter
+        << m_q << m.GetUniqueName() << m_q << m_delimeter
         << static_cast<uint32_t>(pr)
         << std::endl;
   }
@@ -313,8 +356,8 @@ public:
   void RxErrorCb(ns3::Ptr<const ns3::Packet> p, double d)
   {
     std::ofstream& ofs = m_cb_out_map.at("RxError");
-    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
-        << p->GetUid() << ",\t"
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid() << m_delimeter
         << d
         << std::endl;
   }
@@ -322,10 +365,10 @@ public:
   void TxCb(ns3::Ptr<const ns3::Packet> p, ns3::WifiMode m, ns3::WifiPreamble pr, uint8_t hz)
   {
     std::ofstream& ofs = m_cb_out_map.at("Tx");
-    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
-        << p->GetUid() << ",\t"
-        << "\"" << m.GetUniqueName() << "\"" << ",\t"
-        << static_cast<uint32_t>(pr) << ",\t"
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid() << m_delimeter
+        << m_q << m.GetUniqueName() << m_q << m_delimeter
+        << static_cast<uint32_t>(pr) << m_delimeter
         << static_cast<uint32_t>(hz)
         << std::endl;
   }
@@ -341,19 +384,40 @@ public:
   {
     std::string ss;
 
-    //ss = "Time,\tpckt_id,\tsnr,\tmode_id,\tpreamb";
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst";
     m_cb_name_to_hdr_map.insert(std::make_pair("Tx", ss));
 
-    //ss = "Time,\tpckt_id,\tsnr";
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst";
     m_cb_name_to_hdr_map.insert(std::make_pair("Rx", ss));
 
-    //ss = "Time,\tpckt_id,\tsnr";
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst" + m_delimeter +
+         "reas";
     m_cb_name_to_hdr_map.insert(std::make_pair("Drop", ss));
 
-    //ss = "Time,\tpckt_id,\tmode_id,\tpreamb,\tpw";
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst";
     m_cb_name_to_hdr_map.insert(std::make_pair("UnicastForward", ss));
 
-    //ss = "Time,\tpckt_id,\tmode_id,\tpreamb,\tpw";
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst";
     m_cb_name_to_hdr_map.insert(std::make_pair("LocalDeliver", ss));
   }
 
@@ -377,13 +441,20 @@ public:
   {
     std::ofstream& ofs = m_cb_out_map.at("Tx");
 
-    std::stringstream ss;
-    p->Print(ss);
+    ns3::Ipv4Header ip_hdr;
+    p->PeekHeader(ip_hdr);
 
-    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
-        << p->GetUid() << ",\t"
-        << p->GetSize() << ",\t"
-        << "\"" << ss.str() << "\""
+    std::stringstream ssource;
+    ip_hdr.GetSource().Print(ssource);
+
+    std::stringstream sdst;
+    ip_hdr.GetDestination().Print(sdst);
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid() << m_delimeter
+        << p->GetSize() << m_delimeter
+        << m_q << ssource.str() << m_q << m_delimeter
+        << m_q << sdst.str() << m_q
         << std::endl;
   }
 
@@ -391,23 +462,38 @@ public:
   {
     std::ofstream& ofs = m_cb_out_map.at("Rx");
 
-    std::stringstream ss;
-    p->Print(ss);
+    ns3::Ipv4Header ip_hdr;
+    p->PeekHeader(ip_hdr);
 
-    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
-        << p->GetUid() << ",\t"
-        << p->GetSize() << ",\t"
-        << "\"" << ss.str() << "\""
+    std::stringstream ssource;
+    ip_hdr.GetSource().Print(ssource);
+
+    std::stringstream sdst;
+    ip_hdr.GetDestination().Print(sdst);
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid() << m_delimeter
+        << p->GetSize() << m_delimeter
+        << m_q << ssource.str() << m_q << m_delimeter
+        << m_q << sdst.str() << m_q
         << std::endl;
   }
 
   void DropCb(const ns3::Ipv4Header & ip_hdr, ns3::Ptr<const ns3::Packet> p, ns3::Ipv4L3Protocol::DropReason r, ns3::Ptr<ns3::Ipv4> ip, uint32_t ifs)
   {
     std::ofstream& ofs = m_cb_out_map.at("Drop");
-    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
-        << p->GetUid() << ",\t"
-        << p->GetSize() << ",\t"
-        << ip->IsDestinationAddress( ip_hdr.GetDestination(), ifs) << ",\t"
+
+    std::stringstream ssource;
+    ip_hdr.GetSource().Print(ssource);
+
+    std::stringstream sdst;
+    ip_hdr.GetDestination().Print(sdst);
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid() << m_delimeter
+        << p->GetSize() << m_delimeter
+        << m_q << ssource.str() << m_q << m_delimeter
+        << m_q << sdst.str() << m_q
         << static_cast<uint32_t>(r)
         << std::endl;
   }
@@ -422,11 +508,11 @@ public:
     std::stringstream sdst;
     ip_hdr.GetDestination().Print(sdst);
 
-    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
-        << p->GetUid() << ",\t"
-        << p->GetSize() << ",\t"
-        << "\"" << ssource.str() << "\",\t"
-        << "\"" << sdst.str() << "\""
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid() << m_delimeter
+        << p->GetSize() << m_delimeter
+        << m_q << ssource.str() << m_q << m_delimeter
+        << m_q << sdst.str() << m_q
         << std::endl;
 
   }
@@ -441,13 +527,76 @@ public:
     std::stringstream sdst;
     ip_hdr.GetDestination().Print(sdst);
 
-    ofs << ns3::Simulator::Now ().GetSeconds () << ",\t"
-        << p->GetUid() << ",\t"
-        << p->GetSize() << ",\t"
-        << "\"" << ssource.str() << "\",\t"
-        << "\"" << sdst.str() << "\""
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid() << m_delimeter
+        << p->GetSize() << m_delimeter
+        << m_q << ssource.str() << m_q << m_delimeter
+        << m_q << sdst.str() << m_q
         << std::endl;
   }
 };
 
+class PDRAndThroughputMetr : public TracerBase
+{
+private:
+  StatsCollector * m_stats;
+  ns3::Time m_interval;
+public:
+  PDRAndThroughputMetr() : m_stats(0), m_interval(ns3::Seconds(1.0)){}
+  void CreateOutput(const std::string& name)
+  {
+    TracerBase::CreateOutput(name);
+
+    TracerBase::m_out << "time" << m_delimeter
+                      << "tx_all" << m_delimeter
+                      << "rx_all" << m_delimeter
+                      << "thrput" << m_delimeter
+                      << "pdr" << m_delimeter   //not increased
+                      << std::endl;
+  }
+  void SetStatsCollector(StatsCollector* clt)
+  {
+    m_stats = clt;
+  }
+
+  void SetDumpInterval(double sec)
+  {
+    m_interval = ns3::Seconds(sec);
+  }
+
+  void Start()
+  {
+    NS_ASSERT(m_stats != nullptr);
+    ns3::Simulator::Schedule(ns3::Time(0), &PDRAndThroughputMetr::DumpStatistics, this);
+  }
+
+  void DumpStatistics()
+  {
+    double now = ns3::Simulator::Now ().GetSeconds ();
+    uint32_t bytes_rcv_interval = m_stats->GetRxBytes ();    //aggregated
+    uint32_t packetsReceivedAll =  m_stats->GetCumulativeRxPkts();
+    uint32_t packetsTransmitedAll =  m_stats->GetCumulativeTxPkts();
+
+    double pdr = 1.0;
+    if(packetsTransmitedAll)
+    {
+      pdr = (double)packetsReceivedAll / (double)packetsTransmitedAll;
+    }
+
+    TracerBase::m_out << now << m_delimeter
+                      << packetsTransmitedAll << m_delimeter
+                      << packetsReceivedAll << m_delimeter
+                      << (bytes_rcv_interval * 8.0) / m_interval.GetSeconds() << m_delimeter
+                      << pdr << m_delimeter
+                      << std::endl;
+    //reset interval stats
+    m_stats->SetRxBytes (0);
+    m_stats->SetRxPkts (0);
+
+    ns3::Simulator::Schedule(m_interval, &PDRAndThroughputMetr::DumpStatistics, this);
+  }
+};
+
+
 #endif // TRACERS_H
+

@@ -7,7 +7,8 @@ SOURCES += \
         adhoc.cc \
         experimentapp.cc \
         fanetrouting.cc \
-        main.cc
+        main.cc \
+        nettraffiic.cc
 
 INCLUDEPATH += $$(NS3DIR)/build
 INCLUDEPATH += $$PWD/../
@@ -18,7 +19,8 @@ HEADERS += \
     $$PWD/../utils/tracers.h \
     adhoc.h \
     experimentapp.h \
-    fanetrouting.h
+    fanetrouting.h \
+    nettraffiic.h
 
 SOURCES += \
     $$PWD/../utils/tracers.cc

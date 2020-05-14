@@ -8,6 +8,8 @@
 #include "experimentapp.h"
 #include "adhoc.h"
 #include "utils/tracers.h"
+#include "nettraffiic.h"
+
 
 class FanetRoutingExperiment : public ExperimentApp
 {
@@ -31,13 +33,13 @@ private:
 
   //callbacks
   std::vector<DistanceCalculatorAndTracer*> m_dist_calc_trace;
-  std::vector<PingTracer*> m_ping_trace;
   std::vector<WifiPhyTracer*> m_wifi_phy_tracers;
   std::vector<WifiPhyStateTracer*> m_wifi_state_tracers;
   std::vector<Ipv4L3ProtocolTracer*> m_ipv4_tracers;
-
   AllNodesMobilityTracer m_all_nodes_mobility_trace;
   //============================
+
+  NetTrafficCreator m_traffic_creator;
 
   void EnableLogComponent();
 
@@ -46,6 +48,7 @@ private:
   uint16_t m_nsinks;
   RoutingHelper::ROUTING_PROTOCOL m_rout_prot;
   double m_total_sim_time;
+  NetTrafficCreator::NetTrafficClasses m_traffic_apps;
 
   double m_txp; ///< distance
   bool m_traceMobility; ///< trace mobility

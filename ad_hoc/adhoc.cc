@@ -9,120 +9,6 @@
 
 using namespace ns3;
 
-
-RoutingStats::RoutingStats ()
-  : m_RxBytes (0),
-    m_cumulativeRxBytes (0),
-    m_RxPkts (0),
-    m_cumulativeRxPkts (0),
-    m_TxBytes (0),
-    m_cumulativeTxBytes (0),
-    m_TxPkts (0),
-    m_cumulativeTxPkts (0)
-{
-}
-
-uint32_t
-RoutingStats::GetRxBytes ()
-{
-  return m_RxBytes;
-}
-
-uint32_t
-RoutingStats::GetCumulativeRxBytes ()
-{
-  return m_cumulativeRxBytes;
-}
-
-uint32_t
-RoutingStats::GetRxPkts ()
-{
-  return m_RxPkts;
-}
-
-uint32_t
-RoutingStats::GetCumulativeRxPkts ()
-{
-  return m_cumulativeRxPkts;
-}
-
-void
-RoutingStats::IncRxBytes (uint32_t rxBytes)
-{
-  m_RxBytes += rxBytes;
-  m_cumulativeRxBytes += rxBytes;
-}
-
-void
-RoutingStats::IncRxPkts ()
-{
-  m_RxPkts++;
-  m_cumulativeRxPkts++;
-}
-
-void
-RoutingStats::SetRxBytes (uint32_t rxBytes)
-{
-  m_RxBytes = rxBytes;
-}
-
-void
-RoutingStats::SetRxPkts (uint32_t rxPkts)
-{
-  m_RxPkts = rxPkts;
-}
-
-uint32_t
-RoutingStats::GetTxBytes ()
-{
-  return m_TxBytes;
-}
-
-uint32_t
-RoutingStats::GetCumulativeTxBytes ()
-{
-  return m_cumulativeTxBytes;
-}
-
-uint32_t
-RoutingStats::GetTxPkts ()
-{
-  return m_TxPkts;
-}
-
-uint32_t
-RoutingStats::GetCumulativeTxPkts ()
-{
-  return m_cumulativeTxPkts;
-}
-
-void
-RoutingStats::IncTxBytes (uint32_t txBytes)
-{
-  m_TxBytes += txBytes;
-  m_cumulativeTxBytes += txBytes;
-}
-
-void
-RoutingStats::IncTxPkts ()
-{
-  m_TxPkts++;
-  m_cumulativeTxPkts++;
-}
-
-void
-RoutingStats::SetTxBytes (uint32_t txBytes)
-{
-  m_TxBytes = txBytes;
-}
-
-void
-RoutingStats::SetTxPkts (uint32_t txPkts)
-{
-  m_TxPkts = txPkts;
-}
-
-
 /*
  * ====================================================
  */
@@ -332,8 +218,8 @@ RoutingHelper::ReceiveRoutingPacket (Ptr<Socket> socket)
     {
       // application data, for goodput
       uint32_t RxRoutingBytes = packet->GetSize ();
-      GetRoutingStats ().IncRxBytes (RxRoutingBytes);
-      GetRoutingStats ().IncRxPkts ();
+      GetStatsCollector ().IncRxBytes (RxRoutingBytes);
+      GetStatsCollector ().IncRxPkts ();
       if (m_log != 0)
         {
           NS_LOG_UNCOND (m_protocolName + " " + PrintReceivedRoutingPacket (socket, packet, srcAddress));
@@ -345,13 +231,13 @@ void
 RoutingHelper::OnOffTrace (std::string context, Ptr<const Packet> packet)
 {
   uint32_t pktBytes = packet->GetSize ();
-  routingStats.IncTxBytes (pktBytes);
+  m_stats_collector.IncTxBytes (pktBytes);
 }
 
-RoutingStats &
-RoutingHelper::GetRoutingStats ()
+StatsCollector &
+RoutingHelper::GetStatsCollector ()
 {
-  return routingStats;
+  return m_stats_collector;
 }
 
 void
