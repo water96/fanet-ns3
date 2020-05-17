@@ -13,6 +13,11 @@ private:
   Script(const Script& root) = delete;
   Script& operator=(const Script&) = delete;
 public:
+
+  static int MkDir(const std::string& output_dir);
+  static int ChDir(const std::string& dir);
+  static std::string GetEnv(const std::string& var);
+
   ~Script();
   static Script& Instance();
   void SetScriptName(const std::string& script_name);

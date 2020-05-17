@@ -37,6 +37,7 @@ public:
 class NetTraffic
 {
 protected:
+  ExpResults m_res;
 private:
   uint64_t m_index;
   double m_total_time;
@@ -44,6 +45,7 @@ public:
   NetTraffic();
   virtual ~NetTraffic();
   virtual int Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip_c) = 0;
+  virtual ExpResults& GetResultsMap();
 
   uint64_t GetStreamIndex() const;
   double GetTotalSimTime() const;
@@ -76,6 +78,7 @@ private:
 public:
   UdpCbrTraffic();
   virtual ~UdpCbrTraffic();
+  ExpResults& GetResultsMap() override;
   virtual int Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip_c) override;
   //to callbacks
   void RxCb(ns3::Ptr<ns3::Socket> socket);

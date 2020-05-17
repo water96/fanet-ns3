@@ -1,7 +1,17 @@
 #include "experimentapp.h"
 
+using namespace ns3;
+
 ExperimentApp::ExperimentApp ()
 {
+}
+
+TypeId ExperimentApp::GetTypeId (void)
+{
+  static TypeId tid = TypeId ("ExperimentApp")
+    .SetParent<ns3::Object> ()
+    .AddConstructor<ExperimentApp> ();
+  return tid;
 }
 
 ExperimentApp::~ExperimentApp ()

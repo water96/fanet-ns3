@@ -13,6 +13,8 @@
 #include "ns3/mobility-module.h"
 #include "ns3/v4ping.h"
 
+#include "utils/script.h"
+
 #include <string>
 #include <iostream>
 #include <vector>
@@ -20,24 +22,19 @@
 using namespace ns3;
 
 FanetRoutingExperiment::FanetRoutingExperiment()
-  : m_total_sim_time(200.0),
-    m_port (9),
+  : m_total_sim_time(200.0),  //1
     m_nsinks (1),
-    m_txp (40),
-    m_traceMobility (true),
-    m_traffic_apps(NetTrafficCreator::NetTrafficClasses::UDP_CBR),
+    m_txp (40),   //1
+    m_traffic_apps(NetTrafficCreator::NetTrafficClasses::UDP_CBR),  //1
+    m_mob_scenario(""),   //1
     // AODV
-    m_protocol (2),
     m_rout_prot(RoutingHelper::ROUTING_PROTOCOL::AODV),
 
     m_lossModelName ("ns3::FriisPropagationLossModel"),
-    m_phyMode ("OfdmRate6MbpsBW10MHz"),
-    m_traceFile (""),
+    m_phyMode ("OfdmRate27MbpsBW10MHz"),
     m_nNodes (2),
-    m_rate ("2048bps"),
     m_trName ("fanet-routing-compare"),
     m_nodeSpeed (200),
-    m_nodePause (0),
     m_verbose (0),
     m_print_routingTables (true),
     m_asciiTrace (1),
@@ -49,18 +46,28 @@ FanetRoutingExperiment::FanetRoutingExperiment()
 
   m_routingHelper = CreateObject<RoutingHelper> ();
 
-  // set to non-zero value to enable
-  // simply uncond logging during simulation run
-  m_log = 1;
 }
+
+TypeId FanetRoutingExperiment::GetTypeId (void)
+{
+  static TypeId tid = TypeId ("FanetRoutingExperiment")
+    .SetParent<ExperimentApp> ()
+    .AddConstructor<FanetRoutingExperiment> ()
+    .AddAttribute ("Nodes", "Number of nodes in simulation",
+                   UintegerValue (2),
+                   MakeUintegerAccessor (&FanetRoutingExperiment::m_nNodes),
+                   MakeUintegerChecker<uint32_t> (2, 100))
+    .AddAttribute ("Stream", "Seed of random number generation",
+                   UintegerValue (0),
+                   MakeUintegerAccessor (&FanetRoutingExperiment::m_streamIndex),
+                   MakeUintegerChecker<uint32_t> ())
+  ;
+  return tid;
+}
+
 
 FanetRoutingExperiment::~FanetRoutingExperiment()
 {
-  for(auto it : m_dist_calc_trace)
-  {
-    delete it;
-  }
-
   for(auto it : m_wifi_phy_tracers)
   {
     delete it;
@@ -76,12 +83,14 @@ FanetRoutingExperiment::~FanetRoutingExperiment()
     delete it;
   }
 
+  Names::Clear();
 }
 
 void
 FanetRoutingExperiment::SetDefaultAttributeValues ()
 {
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue (m_phyMode));
+  m_mob_scenario = m_nodes_mobility.GetDefaultModel();
 }
 
 void
@@ -91,7 +100,15 @@ FanetRoutingExperiment::ParseCommandLineArguments (int argc, char **argv)
 
   cmd.Parse (argc, argv);
 
-  m_routingHelper->SetLogging (m_log);
+  std::string out_dir = ".";
+
+  std::string script_name = m_mob_scenario + "-" +
+                            std::to_string(static_cast<uint32_t>(m_rout_prot)) + "-" +
+                            std::to_string(m_nNodes) + "n-" +
+                            std::to_string(m_total_sim_time) + "s";
+  Script::Instance().SetScriptName(script_name);
+  Script::Instance().CreateOutputDir(out_dir);
+  Script::ChDir(Script::Instance().GetOutputDir());
 }
 
 void FanetRoutingExperiment::ConfigureNodes ()
@@ -137,10 +154,6 @@ void FanetRoutingExperiment::ConfigureDevices ()
    // Setup WAVE PHY and MAC
   NqosWaveMacHelper wifi80211pMac = NqosWaveMacHelper::Default ();
   Wifi80211pHelper wifi80211p = Wifi80211pHelper::Default ();
-  if (m_verbose)
-  {
-    wifi80211p.EnableLogComponents ();      // Turn on all Wifi 802.11p logging
-  }
 
   WifiHelper wifi;
 
@@ -192,48 +205,13 @@ void FanetRoutingExperiment::ConfigureDevices ()
 
 void FanetRoutingExperiment::ConfigureMobility ()
 {
-  MobilityHelper mobilityAdhoc;
+  m_nodes_mobility.Create(m_mob_scenario);
+  FanetMobility& mob = m_nodes_mobility.Inst();
 
-  ObjectFactory pos;
-  pos.SetTypeId ("ns3::RandomBoxPositionAllocator");
-  pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=20000.0]"));
-  pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=20000.0]"));
-  pos.Set ("Z", StringValue ("ns3::UniformRandomVariable[Min=1800.0|Max=2200.0]"));
-
-  Ptr<PositionAllocator> taPositionAlloc = pos.Create ()->GetObject<PositionAllocator> ();
-  m_streamIndex += taPositionAlloc->AssignStreams (m_streamIndex);
-
-  std::stringstream ssSpeed;
-  ssSpeed << "ns3::UniformRandomVariable[Min=" << m_nodeSpeed * 0.9 << "|Max=" << m_nodeSpeed << "]";
-  std::stringstream ssPause;
-  ssPause << "ns3::ConstantRandomVariable[Constant=" << m_nodePause << "]";
-  mobilityAdhoc.SetMobilityModel ("ns3::RandomWaypointMobilityModel",
-                                  "Speed", StringValue (ssSpeed.str ()),
-                                  "Pause", StringValue (ssPause.str ()),
-                                  "PositionAllocator", PointerValue (taPositionAlloc));
-  mobilityAdhoc.SetPositionAllocator (taPositionAlloc);
-  mobilityAdhoc.Install (m_adhocTxNodes);
-  m_streamIndex += mobilityAdhoc.AssignStreams (m_adhocTxNodes, m_streamIndex);
-
-  ObjectFactory init_pos;
-  init_pos.SetTypeId("ns3::UniformDiscPositionAllocator");
-  init_pos.Set("X", ns3::DoubleValue(10000.0));
-  init_pos.Set("Y", ns3::DoubleValue(10000.0));
-  init_pos.Set("Z", ns3::DoubleValue(2000.0));
-  init_pos.Set("rho", ns3::DoubleValue(100.0));
-
-  Ptr<PositionAllocator> initial_pos = init_pos.Create ()->GetObject<PositionAllocator> ();
-  m_streamIndex += initial_pos->AssignStreams (m_streamIndex);
-
-  AsciiTraceHelper ascii;
-  for(auto it = m_adhocTxNodes.Begin(); it != m_adhocTxNodes.End(); it++)
-  {
-    Ptr<MobilityModel> node_mob = (*it)->GetObject<MobilityModel>();
-    if(node_mob)
-    {
-      node_mob->SetPosition(initial_pos->GetNext());
-    }
-  }
+  mob.SetStreamIndex(m_streamIndex);
+  mob.SetSimulationTime(ns3::Seconds(m_total_sim_time));
+  mob.SetMobilityAreaAndSpeed(ns3::Vector3D(20000.0, 20000.0, 2000.0), m_nodeSpeed);
+  mob.Install(m_adhocTxNodes);
 }
 
 void FanetRoutingExperiment::ConfigureApplications ()
@@ -318,9 +296,23 @@ void FanetRoutingExperiment::EnableLogComponent()
   Packet::EnablePrinting ();
 }
 
+ExpResults FanetRoutingExperiment::GetSimulationResults() const
+{
+  return m_results;
+}
+
 void FanetRoutingExperiment::ConfigureTracing ()
 {
-  EnableLogComponent();
+  //=============================
+  m_nodes_mobility.Inst().ConfigureMobilityTracing();
+  //=============================
+
+  m_routingHelper->SetLogging (m_log);
+
+  if(m_log)
+  {
+    EnableLogComponent();
+  }
 
   AsciiTraceHelper ascii;
   MobilityHelper::EnableAsciiAll (ascii.CreateFileStream (m_trName + ".mob"));
@@ -340,22 +332,6 @@ void FanetRoutingExperiment::ConfigureTracing ()
   {
     Ptr<Node> n = *it;
     std::string n_name = Names::FindName(n);
-
-    //Mobility
-    Ptr<MobilityModel> node_mob = (n)->GetObject<MobilityModel>();
-    if(node_mob)
-    {
-      DistanceCalculatorAndTracer* mob_tmp = new DistanceCalculatorAndTracer;
-      mob_tmp->CreateOutput(n_name + "-mob.csv");
-      mob_tmp->SetNodeMobilityModel(node_mob);
-      ns3::Simulator::Schedule(Time(0.0), &DistanceCalculatorAndTracer::DumperCb, mob_tmp, 1.0);
-      m_dist_calc_trace.push_back(mob_tmp);
-
-      //add node to all mob trace
-      std::size_t s = n_name.find('-');
-      m_all_nodes_mobility_trace.AddNodeMobilityModel(node_mob, n_name.substr(s+1));
-    }
-    //=======================
 
     //Wifi Phy
     Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice>(n->GetDevice(0));
@@ -384,9 +360,6 @@ void FanetRoutingExperiment::ConfigureTracing ()
     //=======================
   }
 
-  m_all_nodes_mobility_trace.CreateOutput("all-nodes-mobs.csv");
-  ns3::Simulator::Schedule(Time(0.0), &AllNodesMobilityTracer::DumperCb, &m_all_nodes_mobility_trace, 1.0);
-
   //Through devices
   for(auto it = m_adhocTxDevices.Begin(); it != m_adhocTxDevices.End(); it++)
   {
@@ -409,7 +382,8 @@ void FanetRoutingExperiment::ConfigureTracing ()
   }
 
   //GlobalTracers
-
+  Ipv4L3ProtocolTracer::DumpStatsTo("all-network-stats-ipv4.csv");
+  ns3::Simulator::Schedule(ns3::Seconds(0.0), &Ipv4L3ProtocolTracer::StatsDumper, 1.0);
   //=======================
 }
 
@@ -425,13 +399,12 @@ void FanetRoutingExperiment::RunSimulation ()
 
 void FanetRoutingExperiment::ProcessOutputs ()
 {
-  double averageRoutingGoodputKbps = 0.0;
-  uint32_t totalBytesTotal = m_routingHelper->GetStatsCollector ().GetCumulativeRxBytes ();
-  averageRoutingGoodputKbps = (((double) totalBytesTotal * 8.0) / m_total_sim_time) / 1000.0;
+  //Close ipv4stats
+  Ipv4L3ProtocolTracer::Stop();
 
-  if (m_log != 0)
-  {
+  //GetResults
+  ExpResults& udp_res = m_traffic_creator.Inst().GetResultsMap();
+  m_results.insert(udp_res.begin(), udp_res.end());
 
-  }
 }
 

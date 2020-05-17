@@ -21,8 +21,32 @@
 
 #include "utils/tracers.h"
 #include "fanetrouting.h"
+#include "utils/script.h"
 
 using namespace ns3;
+
+class ConnectivityTracer : public TracerBase
+{
+private:
+
+public:
+  void CreateOutput(const std::string& name)
+  {
+    TracerBase::CreateOutput(name);
+
+    TracerBase::m_out << "nodes" << m_delimeter
+                      << "con" << m_delimeter
+                      << std::endl;
+  }
+
+  void DumbConnectivity(uint32_t n, double val)
+  {
+    TracerBase::m_out << n << m_delimeter
+                      << val <<m_delimeter
+                      << std::endl;
+  }
+};
+
 
 int main(int argc, char **argv)
 {
@@ -30,21 +54,31 @@ int main(int argc, char **argv)
   //LogComponentEnableAll (LogLevel::LOG_ALL);
   //=====================================
 
-  //Redirect all output to file
-  std::streambuf* old = std::cout.rdbuf();
-  std::ofstream f_cout("fanet-routing-сout.log");
-  std::ofstream f_clog("fanet-routing-сlog.log");
-  std::cout.rdbuf(f_cout.rdbuf());
-  std::clog.rdbuf(f_clog.rdbuf());
-
   std::cout << "test!\n";
 
   //=====================================
 
-  FanetRoutingExperiment exp;
-  exp.Simulate(argc, argv);
+  std::string out_dir = Script::GetEnv("NS3_FANET_OUTPUT_DIR");
+  if(out_dir.length())
+  {
+    Script::MkDir(out_dir);
+  }
 
-  f_cout.close();
-  f_clog.close();
+  Script::ChDir(out_dir);
+
+  ConnectivityTracer tr;
+  tr.CreateOutput("real_connectivity.csv");
+  for(uint32_t n = 2; n <= 20; n+=2)
+  {
+    Script::ChDir(out_dir);
+    Ptr<FanetRoutingExperiment> exp = CreateObject<FanetRoutingExperiment>();
+    exp->SetAttribute("Nodes", UintegerValue(n));
+    exp->SetAttribute("Stream", UintegerValue(0));
+    exp->Simulate(argc, argv);
+    ExpResults r = exp->GetSimulationResults();
+    double d = std::stod(r["RealConnectivity"]);
+    tr.DumbConnectivity(n, d);
+  }
+
   return 0;
 }

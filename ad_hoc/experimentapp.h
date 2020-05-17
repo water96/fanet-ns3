@@ -1,10 +1,13 @@
 #ifndef EXPERIMENTAPP_H
 #define EXPERIMENTAPP_H
 
+#include "ns3/core-module.h"
 
-class ExperimentApp
+class ExperimentApp : public ns3::Object
 {
 public:
+  static ns3::TypeId GetTypeId (void);
+
   /**
    * \brief Constructor
    * \return none

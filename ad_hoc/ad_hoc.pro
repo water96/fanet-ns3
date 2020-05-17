@@ -6,6 +6,7 @@ CONFIG -= qt
 SOURCES += \
         adhoc.cc \
         experimentapp.cc \
+        fanetmobility.cc \
         fanetrouting.cc \
         main.cc \
         nettraffiic.cc
@@ -17,13 +18,16 @@ INCLUDEPATH += $$PWD/../
 #Other
 HEADERS += \
     $$PWD/../utils/tracers.h \
+    $$PWD/../utils/script.h \
     adhoc.h \
     experimentapp.h \
+    fanetmobility.h \
     fanetrouting.h \
     nettraffiic.h
 
 SOURCES += \
-    $$PWD/../utils/tracers.cc
+    $$PWD/../utils/tracers.cc \
+    $$PWD/../utils/script.cc
 
 message ($$INCLUDEPATH)
 

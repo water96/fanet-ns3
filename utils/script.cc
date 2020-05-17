@@ -1,9 +1,11 @@
 #include "utils/script.h"
 
+#include <unistd.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
-const std::string Script::DEFAULT_OUTPUT_DIR = "/mnt/shared/sim";
+const std::string Script::DEFAULT_OUTPUT_DIR = "";
 
 Script::Script() {}
 
@@ -18,6 +20,27 @@ Script& Script::Instance()
 void Script::SetScriptName(const std::string& script_name)
 {
   m_script_name = script_name;
+}
+
+std::string Script::GetEnv(const std::string& name)
+{
+  char* val = getenv(name.c_str());
+  std::string ret;
+  if(val)
+  {
+    ret = std::string(val);
+  }
+  return ret;
+}
+
+int Script::ChDir(const std::string& dir)
+{
+  return chdir(dir.c_str());
+}
+
+int Script::MkDir(const std::string& output_dir)
+{
+  return mkdir(output_dir.c_str (), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
 int Script::CreateOutputDir(const std::string& output_dir)

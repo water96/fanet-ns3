@@ -9,13 +9,17 @@
 #include "adhoc.h"
 #include "utils/tracers.h"
 #include "nettraffiic.h"
+#include "fanetmobility.h"
 
 
 class FanetRoutingExperiment : public ExperimentApp
 {
 public:
   FanetRoutingExperiment();
-  virtual ~FanetRoutingExperiment();
+  virtual ~FanetRoutingExperiment(); 
+  ExpResults GetSimulationResults() const;
+
+  static ns3::TypeId GetTypeId (void);
 
 protected:
   virtual void SetDefaultAttributeValues () override;
@@ -31,19 +35,24 @@ protected:
 
 private:
 
+  //Results
+  ExpResults m_results;
+  //
+
   //callbacks
-  std::vector<DistanceCalculatorAndTracer*> m_dist_calc_trace;
   std::vector<WifiPhyTracer*> m_wifi_phy_tracers;
   std::vector<WifiPhyStateTracer*> m_wifi_state_tracers;
   std::vector<Ipv4L3ProtocolTracer*> m_ipv4_tracers;
-  AllNodesMobilityTracer m_all_nodes_mobility_trace;
   //============================
 
   NetTrafficCreator m_traffic_creator;
+  FanetMobilityCreator m_nodes_mobility;
+
 
   void EnableLogComponent();
 
   std::string m_CSVfileName;
+  std::string m_mob_scenario;
   uint16_t m_port; ///< port
   uint16_t m_nsinks;
   RoutingHelper::ROUTING_PROTOCOL m_rout_prot;

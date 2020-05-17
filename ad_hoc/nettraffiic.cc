@@ -80,6 +80,11 @@ double NetTraffic::GetTotalSimTime() const
   return m_total_time;
 }
 
+ExpResults& NetTraffic::GetResultsMap()
+{
+  return m_res;
+}
+
 //Ping
 PingTraffic::PingTraffic()
 {
@@ -177,10 +182,18 @@ int UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& 
 
   m_pckt_tracer.CreateOutput("pdr-udp-cbr-traffic.csv");
   m_pckt_tracer.SetStatsCollector(&m_stats);
-  m_pckt_tracer.SetDumpInterval(m_interval);
+  m_pckt_tracer.SetDumpInterval(m_interval, GetTotalSimTime());
   m_pckt_tracer.Start();
 
   return 0;
+}
+
+ExpResults& UdpCbrTraffic::GetResultsMap()
+{
+  uint32_t cnter = m_pckt_tracer.GetConnectivityCnter();
+  double conn = (cnter * m_interval) / GetTotalSimTime();
+  m_res.insert(std::make_pair("RealConnectivity", std::to_string(conn)));
+  return m_res;
 }
 
 void UdpCbrTraffic::RxCb(ns3::Ptr<ns3::Socket> socket)

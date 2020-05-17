@@ -1,5 +1,14 @@
 #include "tracers.h"
 
+//Tracers
+const std::string TracerBase::m_delimeter = ",\t";
+const std::string TracerBase::m_q = "\"";
+
+StatsCollector Ipv4L3ProtocolTracer::m_stats;
+std::ofstream Ipv4L3ProtocolTracer::m_stats_out;
+
+//
+
 
 StatsCollector::StatsCollector ()
   : m_RxBytes (0),
