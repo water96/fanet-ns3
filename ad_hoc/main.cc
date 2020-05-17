@@ -28,22 +28,29 @@ using namespace ns3;
 class ConnectivityTracer : public TracerBase
 {
 private:
+  void _declare_files_and_headers()
+  {
+    std::string ss;
+
+    ss = "nodes" + m_delimeter +
+         "con";
+    m_cb_name_to_hdr_map.insert(std::make_pair("DumbConnectivity", ss));
+  }
 
 public:
-  void CreateOutput(const std::string& name)
+  static ns3::TypeId GetTypeId (void)
   {
-    TracerBase::CreateOutput(name);
-
-    TracerBase::m_out << "nodes" << m_delimeter
-                      << "con" << m_delimeter
-                      << std::endl;
+    static ns3::TypeId tid = ns3::TypeId ("ConnectivityTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<ConnectivityTracer> ();
+    return tid;
   }
 
   void DumbConnectivity(uint32_t n, double val)
   {
-    TracerBase::m_out << n << m_delimeter
-                      << val <<m_delimeter
-                      << std::endl;
+    m_cb_out_map.at("DumbConnectivity") << n << m_delimeter
+                                        << val <<m_delimeter
+                                        << std::endl;
   }
 };
 

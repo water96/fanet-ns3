@@ -31,7 +31,6 @@ std::string FanetMobilityCreator::GetDefaultModel()
 
 FanetMobilityCreator::~FanetMobilityCreator()
 {
-
   for(auto& it : m_models)
   {
     delete it.second;

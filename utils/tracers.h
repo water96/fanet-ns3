@@ -62,13 +62,21 @@ private:
   uint32_t m_TxPkts; ///< transmit packets
   uint32_t m_cumulativeTxPkts; ///< cumulative transmit packets
 };
+
 //TODO: add for all tracers static GetTypeId method and change its usage
 class TracerBase : public ns3::Object
 {
 protected:
-  std::ofstream m_out;
+  //std::ofstream m_out;
+  std::map<std::string, std::ofstream> m_cb_out_map;
+  std::map<std::string, std::string>   m_cb_name_to_hdr_map;
+
+  //static
   const static std::string   m_delimeter;
   const static std::string   m_q;
+
+  void _declare_files_and_headers() {}
+
 public:
 
   static ns3::TypeId GetTypeId (void)
@@ -79,19 +87,24 @@ public:
     return tid;
   }
 
-  TracerBase()
-  {
-
-  }
+  TracerBase() = default;
   ~TracerBase()
   {
-    if(m_out.is_open ())
-      m_out.close ();
+    for(auto& it : m_cb_out_map)
+    {
+      it.second.close();
+    }
   }
 
-  void CreateOutput(const std::string& name)
+  void CreateOutput(const std::string& post_fix)
   {
-    m_out.open (name);
+    _declare_files_and_headers();
+
+    for(auto& it : m_cb_name_to_hdr_map)
+    {
+      m_cb_out_map.insert(std::make_pair(it.first, std::ofstream(it.first + "-" + post_fix)));
+      m_cb_out_map.at(it.first) << it.second << std::endl;
+    }
   }
 };
 
@@ -99,6 +112,18 @@ class DistanceCalculatorAndTracer : public TracerBase
 {
 private:
   ns3::Ptr<ns3::MobilityModel> m_target;
+
+  void _declare_files_and_headers()
+  {
+    std::string ss;
+
+    ss = "time" + m_delimeter +
+         "px" + m_delimeter +
+         "py" + m_delimeter +
+         "pz" + m_delimeter +
+         "v";
+    m_cb_name_to_hdr_map.insert(std::make_pair("pos", ss));
+  }
 public:
 
   static ns3::TypeId GetTypeId (void)
@@ -109,34 +134,22 @@ public:
     return tid;
   }
 
-  DistanceCalculatorAndTracer() {}
-  ~DistanceCalculatorAndTracer()
-  {
+  DistanceCalculatorAndTracer() = default;
+  ~DistanceCalculatorAndTracer() = default;
 
-  }
   void SetNodeMobilityModel(ns3::Ptr<ns3::MobilityModel> t)
   {
     m_target = t;
   }
 
-  void CreateOutput(const std::string& name)
-  {
-    TracerBase::CreateOutput(name);
-
-    TracerBase::m_out << "time,\t"
-                     << "px,\t"
-                     << "py,\t"
-                     << "pz,\t"
-                     << "v"
-                     << std::endl;
-  }
-
   void DumperCb(double next)
   {
+    std::ofstream& ofs = m_cb_out_map.at("pos");
+
     ns3::Vector pos = m_target->GetPosition (); // Get position
     ns3::Vector vel = m_target->GetVelocity (); // Get velocity
 
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds() << m_delimeter
+    ofs << ns3::Simulator::Now ().GetSeconds() << m_delimeter
                       << pos.x << m_delimeter
                       << pos.y << m_delimeter
                       << pos.z << m_delimeter
@@ -149,8 +162,32 @@ class AllNodesMobilityTracer : public TracerBase
 {
 private:
   std::map<std::string, ns3::Ptr<ns3::MobilityModel> > m_nodes_mobility;
+  void _declare_files_and_headers()
+  {
+    std::string ss;
+
+    ss = "time";
+
+    for(auto& it : m_nodes_mobility)
+    {
+      ss = ss + m_delimeter + "px" + it.first
+              + m_delimeter + "py" + it.first
+              + m_delimeter + "pz" + it.first
+              + m_delimeter + "v" + it.first;
+    }
+
+    m_cb_name_to_hdr_map.insert(std::make_pair("dump", ss));
+  }
 public:
-  AllNodesMobilityTracer() {}
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("AllNodesMobilityTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<AllNodesMobilityTracer> ();
+    return tid;
+  }
+
+  AllNodesMobilityTracer() = default;
   void AddNodeMobilityModel(ns3::Ptr<ns3::MobilityModel> t, std::string n_id)
   {
     if(m_nodes_mobility.find(n_id) != m_nodes_mobility.end())
@@ -161,38 +198,23 @@ public:
     m_nodes_mobility.insert(std::make_pair(n_id, t));
   }
 
-  void CreateOutput(const std::string& name)
-  {
-    TracerBase::CreateOutput(name);
-
-    TracerBase::m_out << "time";
-
-    for(auto& it : m_nodes_mobility)
-    {
-      TracerBase::m_out << ",\tpx" << it.first
-                        << ",\tpy" << it.first
-                        << ",\tpz" << it.first
-                        << ",\tv" << it.first;
-    }
-
-    TracerBase::m_out << std::endl;
-  }
-
   void DumperCb(double next)
   {
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds();
+    std::ofstream& ofs = m_cb_out_map.at("dump");
+
+    ofs << ns3::Simulator::Now ().GetSeconds();
 
     for(auto& it : m_nodes_mobility)
     {
       ns3::Vector pos = it.second->GetPosition(); // Get position
       ns3::Vector vel = it.second->GetVelocity (); // Get velocity
 
-      TracerBase::m_out << m_delimeter << pos.x
+      ofs << m_delimeter << pos.x
                         << m_delimeter << pos.y
                         << m_delimeter << pos.z
                         << m_delimeter << vel.GetLength();
     }
-    TracerBase::m_out << std::endl;
+    ofs << std::endl;
 
     ns3::Simulator::Schedule(ns3::Seconds(next), &AllNodesMobilityTracer::DumperCb, this, next);
   }
@@ -236,7 +258,27 @@ class QueCalcer : public TracerBase
 private:
   std::map<ns3::Ptr<const ns3::Packet>, double > que;
   uint64_t m_total_send;
+
+  void _declare_files_and_headers()
+  {
+    std::string ss;
+
+    ss = "time" + m_delimeter
+       + "diff" + m_delimeter
+       + "total";
+
+    m_cb_name_to_hdr_map.insert(std::make_pair("TraceTxQue", ss));
+  }
 public:
+
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("QueCalcer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<QueCalcer> ();
+    return tid;
+  }
+
   QueCalcer() : m_total_send(0){}
   void TraceTxStart(ns3::Ptr< const ns3::Packet > packet)
   {
@@ -245,97 +287,171 @@ public:
 
   void TraceTxEnd(ns3::Ptr< const ns3::Packet > packet)
   {
+    std::ofstream& ofs = m_cb_out_map.at("TraceTxQue");
+
     double now = ns3::Simulator::Now ().GetSeconds ();
     double diff = now - que[packet];
     m_total_send += packet->GetSize ();
-    m_out << now << "\t" << diff << "\t" << m_total_send << std::endl;
+    ofs << now << "\t" << diff << "\t" << m_total_send << std::endl;
   }
 };
 
-class MobTracer : public TracerBase
+class NodeMobTracer : public TracerBase
 {
 private:
   ns3::Ptr<ns3::MobilityModel> ap_mobility;
+
+  void _declare_files_and_headers()
+  {
+    std::string ss;
+
+    ss = "time" + m_delimeter
+       + "px" + m_delimeter
+       + "py" + m_delimeter
+       + "v" + m_delimeter
+       + "d" + m_delimeter
+       + "apx" + m_delimeter
+       + "apy";
+
+    m_cb_name_to_hdr_map.insert(std::make_pair("CourseChange", ss));
+  }
+
 public:
-  MobTracer() : ap_mobility(nullptr){}
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("NodeMobTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<NodeMobTracer> ();
+    return tid;
+  }
+
+  NodeMobTracer() : ap_mobility(nullptr){}
   void SetApMobilityModel(ns3::Ptr<ns3::MobilityModel> mob)
   {
     ap_mobility = mob;
   }
   void CourseChangeCb(ns3::Ptr< const ns3::MobilityModel > model)
   {
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << "\t" << model->GetPosition ().x << "\t" << model->GetPosition ().y << "\t" << model->GetVelocity ().GetLength () << "\t" << model->GetDistanceFrom (ap_mobility) << "\t" << ap_mobility->GetPosition ().x << "\t" << ap_mobility->GetPosition ().y << std::endl;
+    std::ofstream& ofs = m_cb_out_map.at("CourseChange");
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << "\t"
+        << model->GetPosition ().x << "\t"
+        << model->GetPosition ().y << "\t"
+        << model->GetVelocity ().GetLength () << "\t"
+        << model->GetDistanceFrom (ap_mobility) << "\t"
+        << ap_mobility->GetPosition ().x << "\t"
+        << ap_mobility->GetPosition ().y
+        << std::endl;
   }
 };
 
 class PingTracer : public TracerBase
 {
 private:
-public:
-  PingTracer(){}
-  void CreateOutput(const std::string& name)
+  void _declare_files_and_headers()
   {
-    TracerBase::CreateOutput(name);
+    std::string ss;
 
-    TracerBase::m_out << "time,\t"
-                     << "rtt"
-                     << std::endl;
+    ss = "time" + m_delimeter
+       + "rtt";
+
+    m_cb_name_to_hdr_map.insert(std::make_pair("RttPing", ss));
   }
+
+public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("PingTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<PingTracer> ();
+    return tid;
+  }
+
+  PingTracer() = default;
 
   void RttPingCb(ns3::Time rtt)
   {
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << m_delimeter << rtt.GetSeconds () << std::endl;
+    std::ofstream& ofs = m_cb_out_map.at("RttPing");
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << rtt.GetSeconds ()
+        << std::endl;
   }
 };
 
 class ArpTracer : public TracerBase
 {
 private:
-public:
-  ArpTracer(){}
-  void CreateOutput(const std::string& name)
+  void _declare_files_and_headers()
   {
-    TracerBase::CreateOutput(name);
+    std::string ss;
 
-    TracerBase::m_out << "time,\t"
-                     << "p_id"
-                     << std::endl;
+    ss = "time" + m_delimeter
+       + "p_id";
+
+    m_cb_name_to_hdr_map.insert(std::make_pair("ArpDrop", ss));
   }
+
+public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("ArpTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<ArpTracer> ();
+    return tid;
+  }
+
+  ArpTracer() = default;
 
   void ArpDropCb(ns3::Ptr<const ns3::Packet> p)
   {
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << m_delimeter << p->GetUid() << std::endl;
+    std::ofstream& ofs = m_cb_out_map.at("ArpDrop");
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid()
+        << std::endl;
   }
 };
 
 class WifiPhyTracer : public TracerBase
 {
 private:
-public:
-  WifiPhyTracer(){}
-  void CreateOutput(const std::string& name)
+  void _declare_files_and_headers()
   {
-    TracerBase::CreateOutput(name);
+    std::string ss;
 
-    TracerBase::m_out << "time,\t"
-                     << "pckt_id,\t"
-                     << "reas"
-                     << std::endl;
+    ss = "time" + m_delimeter
+       + "p_id" + m_delimeter
+       + "reas";
+
+    m_cb_name_to_hdr_map.insert(std::make_pair("WifiPhyDrop", ss));
   }
+public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("WifiPhyTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<WifiPhyTracer> ();
+    return tid;
+  }
+
+  WifiPhyTracer() = default;
 
   void WifiPhyDropCb(ns3::Ptr<const ns3::Packet> p, ns3::WifiPhyRxfailureReason reason)
   {
-    TracerBase::m_out << ns3::Simulator::Now ().GetSeconds () << m_delimeter << p->GetUid() << m_delimeter << static_cast<uint32_t>(reason) << std::endl;
+    std::ofstream& ofs = m_cb_out_map.at("WifiPhyDrop");
+
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << p->GetUid() << m_delimeter
+        << static_cast<uint32_t>(reason)
+        << std::endl;
   }
 };
 
 class WifiPhyStateTracer : public TracerBase
 {
 private:
-  std::map<std::string, std::ofstream> m_cb_out_map;
-  std::map<std::string, std::string> m_cb_name_to_hdr_map;
-public:
-  WifiPhyStateTracer()
+
+  void _declare_files_and_headers()
   {
     std::string ss;
 
@@ -348,22 +464,17 @@ public:
     ss = "Time,\tpckt_id,\tmode_id,\tpreamb,\tpw";
     m_cb_name_to_hdr_map.insert(std::make_pair("Tx", ss));
   }
+public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("WifiPhyStateTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<WifiPhyStateTracer> ();
+    return tid;
+  }
 
-  ~WifiPhyStateTracer()
-  {
-    for(auto& it : m_cb_out_map)
-    {
-      it.second.close();
-    }
-  }
-  void CreateOutput(const std::string& post_fix)
-  {
-    for(auto& it : m_cb_name_to_hdr_map)
-    {
-      m_cb_out_map.insert(std::make_pair(it.first, std::ofstream(it.first + "-" + post_fix)));
-      m_cb_out_map.at(it.first) << it.second << std::endl;
-    }
-  }
+  WifiPhyStateTracer() = default;
+  ~WifiPhyStateTracer() = default;
 
   void RxOkCb(ns3::Ptr<const ns3::Packet> p, double d, ns3::WifiMode m, ns3::WifiPreamble pr)
   {
@@ -400,14 +511,60 @@ public:
 class Ipv4L3ProtocolTracer : public TracerBase
 {
 private:
-  std::map<std::string, std::ofstream> m_cb_out_map;
-  std::map<std::string, std::string> m_cb_name_to_hdr_map;
 
   //Static
   static StatsCollector m_stats;
   static std::ofstream m_stats_out;
   //
+  void _declare_files_and_headers()
+  {
+    std::string ss;
+
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst";
+    m_cb_name_to_hdr_map.insert(std::make_pair("Tx", ss));
+
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst";
+    m_cb_name_to_hdr_map.insert(std::make_pair("Rx", ss));
+
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst" + m_delimeter +
+         "reas";
+    m_cb_name_to_hdr_map.insert(std::make_pair("Drop", ss));
+
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst";
+    m_cb_name_to_hdr_map.insert(std::make_pair("UnicastForward", ss));
+
+    ss = "t" + m_delimeter +
+         "pid" + m_delimeter +
+         "s" + m_delimeter +
+         "src" + m_delimeter +
+         "dst";
+    m_cb_name_to_hdr_map.insert(std::make_pair("LocalDeliver", ss));
+  }
 public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("Ipv4L3ProtocolTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<Ipv4L3ProtocolTracer> ();
+    return tid;
+  }
+
   static void DumpStatsTo(const std::string& str)
   {
     if(m_stats_out.is_open())
@@ -456,62 +613,8 @@ public:
     m_stats_out.close();
   }
   //==========================================
-  Ipv4L3ProtocolTracer()
-  {
-    std::string ss;
-
-    ss = "t" + m_delimeter +
-         "pid" + m_delimeter +
-         "s" + m_delimeter +
-         "src" + m_delimeter +
-         "dst";
-    m_cb_name_to_hdr_map.insert(std::make_pair("Tx", ss));
-
-    ss = "t" + m_delimeter +
-         "pid" + m_delimeter +
-         "s" + m_delimeter +
-         "src" + m_delimeter +
-         "dst";
-    m_cb_name_to_hdr_map.insert(std::make_pair("Rx", ss));
-
-    ss = "t" + m_delimeter +
-         "pid" + m_delimeter +
-         "s" + m_delimeter +
-         "src" + m_delimeter +
-         "dst" + m_delimeter +
-         "reas";
-    m_cb_name_to_hdr_map.insert(std::make_pair("Drop", ss));
-
-    ss = "t" + m_delimeter +
-         "pid" + m_delimeter +
-         "s" + m_delimeter +
-         "src" + m_delimeter +
-         "dst";
-    m_cb_name_to_hdr_map.insert(std::make_pair("UnicastForward", ss));
-
-    ss = "t" + m_delimeter +
-         "pid" + m_delimeter +
-         "s" + m_delimeter +
-         "src" + m_delimeter +
-         "dst";
-    m_cb_name_to_hdr_map.insert(std::make_pair("LocalDeliver", ss));
-  }
-
-  ~Ipv4L3ProtocolTracer()
-  {
-    for(auto& it : m_cb_out_map)
-    {
-      it.second.close();
-    }
-  }
-  void CreateOutput(const std::string& post_fix)
-  {
-    for(auto& it : m_cb_name_to_hdr_map)
-    {
-      m_cb_out_map.insert(std::make_pair(it.first, std::ofstream(it.first + "-" + post_fix)));
-      m_cb_out_map.at(it.first) << it.second << std::endl;
-    }
-  }
+  Ipv4L3ProtocolTracer() = default;
+  ~Ipv4L3ProtocolTracer() = default;
 
   void TxCb(ns3::Ptr<const ns3::Packet> p, ns3::Ptr<ns3::Ipv4> ip,  uint32_t ifs)
   {
@@ -625,19 +728,29 @@ private:
   ns3::Time m_interval;
   ns3::Time m_total;
   uint32_t m_conn_cnter;
-public:
-  PDRAndThroughputMetr() : m_stats(0), m_interval(ns3::Seconds(1.0)), m_conn_cnter(0){}
-  void CreateOutput(const std::string& name)
-  {
-    TracerBase::CreateOutput(name);
 
-    TracerBase::m_out << "time" << m_delimeter
-                      << "tx_all" << m_delimeter
-                      << "rx_all" << m_delimeter
-                      << "thrput" << m_delimeter
-                      << "pdr" << m_delimeter   //not increased
-                      << std::endl;
+  void _declare_files_and_headers()
+  {
+    std::string ss;
+
+    ss = "time,\ttx_all,\trx_all,\tthrput,\tpdr";
+    m_cb_name_to_hdr_map.insert(std::make_pair("DumpPDR", ss));
+
+    ss = "time,\ttx,\trx,\tp";
+    m_cb_name_to_hdr_map.insert(std::make_pair("DumpConnectivity", ss));
+
   }
+public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("PDRAndThroughputMetr")
+      .SetParent<TracerBase> ()
+      .AddConstructor<PDRAndThroughputMetr> ();
+    return tid;
+  }
+
+  PDRAndThroughputMetr() : m_stats(0), m_interval(ns3::Seconds(1.0)), m_conn_cnter(0){}
+
   void SetStatsCollector(StatsCollector* clt)
   {
     m_stats = clt;
@@ -668,17 +781,30 @@ public:
       pdr = (double)packetsReceivedAll / (double)packetsTransmitedAll;
     }
 
+    m_cb_out_map.at("DumpPDR") << now << m_delimeter
+                                << packetsTransmitedAll << m_delimeter
+                                << packetsReceivedAll << m_delimeter
+                                << (bytes_rcv_interval * 8.0) / m_interval.GetSeconds() << m_delimeter
+                                << pdr << m_delimeter
+                                << std::endl;
+
     if(m_stats->GetRxPkts() == m_stats->GetTxPkts())
     {
       m_conn_cnter++;
     }
 
-    TracerBase::m_out << now << m_delimeter
-                      << packetsTransmitedAll << m_delimeter
-                      << packetsReceivedAll << m_delimeter
-                      << (bytes_rcv_interval * 8.0) / m_interval.GetSeconds() << m_delimeter
-                      << pdr << m_delimeter
-                      << std::endl;
+    pdr = 1.0;
+    if(m_stats->GetTxPkts())
+    {
+      pdr = (double)m_stats->GetRxPkts() / (double)m_stats->GetTxPkts();
+    }
+
+    m_cb_out_map.at("DumpConnectivity") << now << m_delimeter
+                                        << m_stats->GetTxPkts() << m_delimeter
+                                        << m_stats->GetRxPkts() << m_delimeter
+                                        << pdr << m_delimeter
+                                        << std::endl;
+
     //reset interval stats
     m_stats->SetRxBytes (0);
     m_stats->SetRxPkts (0);

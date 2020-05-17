@@ -25,7 +25,7 @@ FanetRoutingExperiment::FanetRoutingExperiment()
   : m_total_sim_time(200.0),  //1
     m_nsinks (1),
     m_txp (40),   //1
-    m_traffic_apps(NetTrafficCreator::NetTrafficClasses::UDP_CBR),  //1
+    m_traffic_model(NetTrafficCreator::Inst().GetDefaultModel()),  //1
     m_mob_scenario(""),   //1
     // AODV
     m_rout_prot(RoutingHelper::ROUTING_PROTOCOL::AODV),
@@ -68,21 +68,7 @@ TypeId FanetRoutingExperiment::GetTypeId (void)
 
 FanetRoutingExperiment::~FanetRoutingExperiment()
 {
-  for(auto it : m_wifi_phy_tracers)
-  {
-    delete it;
-  }
-
-  for(auto it : m_wifi_state_tracers)
-  {
-    delete it;
-  }
-
-  for(auto it : m_ipv4_tracers)
-  {
-    delete it;
-  }
-
+  NetTrafficCreator::Inst().DestroyNetTrafficModel();
   Names::Clear();
 }
 
@@ -253,8 +239,10 @@ void FanetRoutingExperiment::ConfigureApplications ()
       break;
     }
 
-  m_traffic_creator.Create(m_traffic_apps, m_streamIndex, m_total_sim_time);
-  m_traffic_creator.Inst().Install(m_adhocTxNodes, m_adhocTxInterfaces);
+  //Create net traffic model
+  NetTrafficCreator::Inst().CreateNetTrafficModel(m_traffic_model, m_streamIndex, m_total_sim_time);
+
+  NetTrafficCreator::Inst().GetNetTrafficModel().Install(m_adhocTxNodes, m_adhocTxInterfaces);
 
 //  Simulator::Schedule(Seconds(20.0), &Ipv4::SetDown, m_adhocTxInterfaces.Get(1).first, m_adhocTxInterfaces.Get(1).second);
 //  Simulator::Schedule(Seconds(27.0), &Ipv4::SetUp, m_adhocTxInterfaces.Get(1).first, m_adhocTxInterfaces.Get(1).second);
@@ -403,7 +391,7 @@ void FanetRoutingExperiment::ProcessOutputs ()
   Ipv4L3ProtocolTracer::Stop();
 
   //GetResults
-  ExpResults& udp_res = m_traffic_creator.Inst().GetResultsMap();
+  ExpResults& udp_res = NetTrafficCreator::Inst().GetNetTrafficModel().GetResultsMap();
   m_results.insert(udp_res.begin(), udp_res.end());
 
 }

@@ -40,12 +40,11 @@ private:
   //
 
   //callbacks
-  std::vector<WifiPhyTracer*> m_wifi_phy_tracers;
-  std::vector<WifiPhyStateTracer*> m_wifi_state_tracers;
-  std::vector<Ipv4L3ProtocolTracer*> m_ipv4_tracers;
+  std::vector<ns3::Ptr<WifiPhyTracer> > m_wifi_phy_tracers;
+  std::vector<ns3::Ptr<WifiPhyStateTracer> > m_wifi_state_tracers;
+  std::vector<ns3::Ptr<Ipv4L3ProtocolTracer> > m_ipv4_tracers;
   //============================
 
-  NetTrafficCreator m_traffic_creator;
   FanetMobilityCreator m_nodes_mobility;
 
 
@@ -57,7 +56,7 @@ private:
   uint16_t m_nsinks;
   RoutingHelper::ROUTING_PROTOCOL m_rout_prot;
   double m_total_sim_time;
-  NetTrafficCreator::NetTrafficClasses m_traffic_apps;
+  std::string m_traffic_model;
 
   double m_txp; ///< distance
   bool m_traceMobility; ///< trace mobility

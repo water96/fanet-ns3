@@ -11,39 +11,46 @@
 #include "utils/tracers.h"
 
 class NetTraffic;
+class NetTrafficCreator;
 
 class NetTrafficCreator
 {
 private:
-  std::vector<std::string> m_models;
+  std::map<std::string, NetTraffic*> m_models;
+  std::string m_default;
+
   NetTraffic* m_inst;
 
-public:
-
-  enum NetTrafficClasses
-  {
-    PING_TRAFFIC = 0u,
-    UDP_CBR,
-  };
-
   NetTrafficCreator();
+public:
+  NetTrafficCreator(const NetTrafficCreator&) = delete;
+  NetTrafficCreator& operator=(const NetTrafficCreator&) = delete;
   ~NetTrafficCreator();
 
-  int Create(NetTrafficClasses c, uint64_t stream_index, double total_sim_time);
-  NetTraffic& Inst();
+  static NetTrafficCreator& Inst();
 
+  std::string GetModelsList();
+  std::string GetDefaultModel();
+  int CreateNetTrafficModel(const std::string& model, uint64_t stream_index, double total_sim_time);
+  NetTraffic& GetNetTrafficModel();
+  void DestroyNetTrafficModel();
 };
 
 class NetTraffic
 {
 protected:
   ExpResults m_res;
+  virtual NetTraffic* Clone() const = 0;
 private:
   uint64_t m_index;
   double m_total_time;
+
 public:
   NetTraffic();
   virtual ~NetTraffic();
+  NetTraffic& operator=(const NetTraffic&) = delete;
+  NetTraffic(const NetTraffic&) = delete;
+
   virtual int Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip_c) = 0;
   virtual ExpResults& GetResultsMap();
 
@@ -56,7 +63,8 @@ public:
 class PingTraffic : public NetTraffic
 {
 private:
-  std::vector<PingTracer*> m_ping_trace;
+  std::vector<ns3::Ptr<PingTracer> > m_ping_trace;
+  virtual NetTraffic* Clone() const override;
 public:
   PingTraffic();
   virtual ~PingTraffic();
@@ -75,6 +83,7 @@ private:
 
   void GenerateTraffic(ns3::Ptr<ns3::Socket> socket);
 
+  virtual NetTraffic* Clone() const override;
 public:
   UdpCbrTraffic();
   virtual ~UdpCbrTraffic();
