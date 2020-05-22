@@ -4,6 +4,11 @@ using namespace ns3;
 
 //Creator
 
+FanetMobilityCreator& FanetMobilityCreator::Inst()
+{
+  static FanetMobilityCreator inst;
+  return inst;
+}
 
 FanetMobilityCreator::FanetMobilityCreator() : m_inst(nullptr)
 {
@@ -35,14 +40,16 @@ FanetMobilityCreator::~FanetMobilityCreator()
   {
     delete it.second;
   }
+
+  DestroyMobilityModel();
 }
 
-int FanetMobilityCreator::Create(const std::string& model)
+int FanetMobilityCreator::CreateMobilityModel(const std::string &model)
 {
   auto if_find = m_models.find(model);
   if(if_find != m_models.end())
   {
-    m_inst = if_find->second;
+    m_inst = if_find->second->Clone();
   }
   else
   {
@@ -52,11 +59,21 @@ int FanetMobilityCreator::Create(const std::string& model)
   return (m_inst != nullptr) ? 0 : 1;
 }
 
-FanetMobility& FanetMobilityCreator::Inst()
+FanetMobility& FanetMobilityCreator::GetMobilityModel()
 {
   NS_ASSERT(m_inst != nullptr);
   return *m_inst;
 }
+
+void FanetMobilityCreator::DestroyMobilityModel()
+{
+  if(m_inst)
+  {
+    delete m_inst;
+    m_inst = nullptr;
+  }
+}
+
 
 //===========================================================//
 
@@ -79,6 +96,11 @@ FanetMobility::~FanetMobility(){}
 RWPFANETMobility::~RWPFANETMobility()
 {
 
+}
+
+FanetMobility* RWPFANETMobility::Clone() const
+{
+  return new RWPFANETMobility();
 }
 
 void RWPFANETMobility::SetSimulationTime(const ns3::Time& t)
@@ -153,6 +175,10 @@ void RWPFANETMobility::Install(const ns3::NodeContainer& c)
 
 void RWPFANETMobility::ConfigureMobilityTracing()
 {
+  //Create trace object
+  m_all_nodes_mobility_trace = ns3::CreateObject<AllNodesMobilityTracer>();
+  //
+
   //Through nodes
   for(auto it = m_nodes.Begin(); it != m_nodes.End(); it++)
   {
@@ -163,20 +189,14 @@ void RWPFANETMobility::ConfigureMobilityTracing()
     Ptr<MobilityModel> node_mob = (n)->GetObject<MobilityModel>();
     if(node_mob)
     {
-      Ptr<DistanceCalculatorAndTracer> mob_tmp = CreateObject<DistanceCalculatorAndTracer>();
-      mob_tmp->CreateOutput(n_name + "-mob.csv");
-      mob_tmp->SetNodeMobilityModel(node_mob);
-      ns3::Simulator::Schedule(Time(0.0), &DistanceCalculatorAndTracer::DumperCb, mob_tmp, 1.0);
-      m_dist_calc_trace.push_back(mob_tmp);
-
       //add node to all mob trace
       std::size_t s = n_name.find('-');
-      m_all_nodes_mobility_trace.AddNodeMobilityModel(node_mob, n_name.substr(s+1));
+      m_all_nodes_mobility_trace->AddNodeMobilityModel(node_mob, n_name.substr(s+1));
     }
   }
 
-  m_all_nodes_mobility_trace.CreateOutput("all-nodes-mobs.csv");
-  ns3::Simulator::Schedule(Time(0.0), &AllNodesMobilityTracer::DumperCb, &m_all_nodes_mobility_trace, 1.0);
+  m_all_nodes_mobility_trace->CreateOutput("all-nodes-mobs.csv");
+  ns3::Simulator::Schedule(Time(0.0), &AllNodesMobilityTracer::DumperCb, m_all_nodes_mobility_trace, 1.0);
 
 
 }

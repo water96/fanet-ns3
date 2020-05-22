@@ -27,11 +27,7 @@ RoutingHelper::GetTypeId (void)
 
 RoutingHelper::RoutingHelper ()
   : m_TotalSimTime (TOTAL_SIM_TIME),
-    m_protocol (ROUTING_PROTOCOL::NONE),
-    m_port (PORT),
-    m_nSinks (0),
-    m_routingTables (1),
-    m_log (0)
+    m_protocol ("")
 {
 }
 
@@ -44,30 +40,17 @@ RoutingHelper::Install (NodeContainer & c,
                         NetDeviceContainer & d,
                         Ipv4InterfaceContainer & i,
                         double totalTime,
-                        ROUTING_PROTOCOL protocol,
-                        uint32_t nSinks,
-                        int routingTables)
+                        std::string protocol)
 {
   m_TotalSimTime = totalTime;
   m_protocol = protocol;
-  m_nSinks = nSinks;
-  m_routingTables = routingTables;
 
   SetupRoutingProtocol (c);
   AssignIpAddresses (d, i);
-  SetupRoutingMessages (c, i);
-}
 
-Ptr<Socket>
-RoutingHelper::SetupRoutingPacketReceive (Ipv4Address addr, Ptr<Node> node)
-{
-  TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
-  Ptr<Socket> sink = Socket::CreateSocket (node, tid);
-  InetSocketAddress local = InetSocketAddress (addr, m_port);
-  sink->Bind (local);
-  sink->SetRecvCallback (MakeCallback (&RoutingHelper::ReceiveRoutingPacket, this));
-
-  return sink;
+  m_nodes = c;
+  m_devs = d;
+  m_ifs = i;
 }
 
 void
@@ -80,52 +63,38 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
   Ipv4ListRoutingHelper list;
   InternetStackHelper internet;
 
-  Time rtt = Time (5.0);
   AsciiTraceHelper ascii;
 
-  switch (m_protocol)
-    {
-      case ROUTING_PROTOCOL::NONE:
-        m_protocolName = "NONE";
-      break;
-      case ROUTING_PROTOCOL::OLSR:
-        routing = new OlsrHelper;
-        m_protocolName = "OLSR";
-      break;
-      case ROUTING_PROTOCOL::AODV:
-        routing = new AodvHelper;
-        //prot = routing->GetRouting<ns3::aodv::RoutingProtocol>(prot);
-        //prot->SetAttribute("EnableHello", BooleanValue(false));
-        m_protocolName = "AODV";
-      break;
-      case ROUTING_PROTOCOL::DSDV:
-        routing = new DsdvHelper;
-        m_protocolName = "DSDV";
-      break;
-      case ROUTING_PROTOCOL::DSR:
-        DsrHelper dsr;
-        DsrMainHelper dsrMain;
-        dsrMain.Install (dsr, c);
-        m_protocolName = "DSR";
-      break;
-    }
+  if(m_protocol == "AODV")
+  {
+    routing = new AodvHelper;
+  }
+  else if(m_protocol == "OLSR")
+  {
+    routing = new OlsrHelper;
+  }
+  else if(m_protocol == "GPSR")
+  {
+
+  }
+  else
+  {
+
+  }
 
   if(routing)
   {
-    if (m_routingTables != 0)
+    for (auto it = c.Begin(); it != c.End(); it++)
     {
-      for (auto it = c.Begin(); it != c.End(); it++)
+      std::string n_name = Names::FindName(*it);
+      if(n_name.empty())
       {
-        std::string n_name = Names::FindName(*it);
-        if(n_name.empty())
-        {
-          n_name = "node-" + std::to_string((*it)->GetId());
-        }
-        Ptr<OutputStreamWrapper> rtw = ascii.CreateFileStream (n_name + ".rt");
-        routing->PrintRoutingTableEvery(Seconds(1.0), *it, rtw);
+        n_name = "node-" + std::to_string((*it)->GetId());
       }
-
+      Ptr<OutputStreamWrapper> rtw = ascii.CreateFileStream (n_name + ".rt");
+      routing->PrintRoutingTableEvery(Seconds(1.0), *it, rtw);
     }
+
     list.Add(*routing, prior);
     internet.SetRoutingHelper (list);
     delete routing;
@@ -133,13 +102,8 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
 
   internet.Install (c);
 
-  internet.EnablePcapIpv4All("ip-pcap");
-  internet.EnableAsciiIpv4All("ip-ascii");
-
-  if (m_log != 0)
-    {
-      NS_LOG_UNCOND ("Routing Setup for " << m_protocolName);
-    }
+  //internet.EnablePcapIpv4All("ip-pcap");
+  //internet.EnableAsciiIpv4All("ip-ascii");
 }
 
 void
@@ -183,57 +147,6 @@ RoutingHelper::AssignIpAddresses (NetDeviceContainer & d,
   }
 }
 
-void
-RoutingHelper::SetupRoutingMessages (NodeContainer & c,
-                                     Ipv4InterfaceContainer & adhocTxInterfaces)
-{
-
-}
-
-static inline std::string
-PrintReceivedRoutingPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address srcAddress)
-{
-  std::ostringstream oss;
-
-  oss << Simulator::Now ().GetSeconds () << " " << socket->GetNode ()->GetId ();
-
-  if (InetSocketAddress::IsMatchingType (srcAddress))
-    {
-      InetSocketAddress addr = InetSocketAddress::ConvertFrom (srcAddress);
-      oss << " received one packet from " << addr.GetIpv4 ();
-    }
-  else
-    {
-      oss << " received one packet!";
-    }
-  return oss.str ();
-}
-
-void
-RoutingHelper::ReceiveRoutingPacket (Ptr<Socket> socket)
-{
-  Ptr<Packet> packet;
-  Address srcAddress;
-  while ((packet = socket->RecvFrom (srcAddress)))
-    {
-      // application data, for goodput
-      uint32_t RxRoutingBytes = packet->GetSize ();
-      GetStatsCollector ().IncRxBytes (RxRoutingBytes);
-      GetStatsCollector ().IncRxPkts ();
-      if (m_log != 0)
-        {
-          NS_LOG_UNCOND (m_protocolName + " " + PrintReceivedRoutingPacket (socket, packet, srcAddress));
-        }
-    }
-}
-
-void
-RoutingHelper::OnOffTrace (std::string context, Ptr<const Packet> packet)
-{
-  uint32_t pktBytes = packet->GetSize ();
-  m_stats_collector.IncTxBytes (pktBytes);
-}
-
 StatsCollector &
 RoutingHelper::GetStatsCollector ()
 {
@@ -241,9 +154,45 @@ RoutingHelper::GetStatsCollector ()
 }
 
 void
-RoutingHelper::SetLogging (int log)
+RoutingHelper::ConfigureTracing()
 {
-  m_log = log;
+  if(m_protocol == "AODV")
+  {
+    for(auto it = m_nodes.Begin(); it != m_nodes.End(); it++)
+    {
+      Ptr<Ipv4RoutingProtocol> routing = (*it)->GetObject<Ipv4RoutingProtocol>();
+      if(routing)
+      {
+        routing->SetAttribute("EnableHello", BooleanValue(false));
+      }
+    }
+  }
+  else if(m_protocol == "OLSR")
+  {
+  }
+  else if(m_protocol == "GPSR")
+  {
+
+  }
+
+  m_ip_lev_tracer.SetDumpInterval(1.0);
+  m_ip_lev_tracer.CreateOutput("ipv4.csv");
+
+  //Through ip interaces
+  for(auto it = m_ifs.Begin(); it != m_ifs.End(); it++)
+  {
+    Ptr<Ipv4> ip = it->first;
+    std::string n_name = Names::FindName(ip->GetNetDevice(it->second)->GetNode());
+    ns3::Ptr<Ipv4L3ProtocolTracer> tmp = CreateObject<Ipv4L3ProtocolTracer>();
+    tmp->CreateOutput("ipv4-" + n_name + ".csv");
+    ip->TraceConnectWithoutContext("Tx", MakeCallback(&Ipv4L3ProtocolTracer::TxCb, tmp));
+    ip->TraceConnectWithoutContext("Rx", MakeCallback(&Ipv4L3ProtocolTracer::RxCb, tmp));
+    ip->TraceConnectWithoutContext("Drop", MakeCallback(&Ipv4L3ProtocolTracer::DropCb, tmp));
+    ip->TraceConnectWithoutContext("UnicastForward", MakeCallback(&Ipv4L3ProtocolTracer::UnicastForwardCb, tmp));
+    ip->TraceConnectWithoutContext("LocalDeliver", MakeCallback(&Ipv4L3ProtocolTracer::LocalDeliverCb, tmp));
+    m_ipv4_tracers.push_back(tmp);
+    m_ip_lev_tracer.AddCollectingStatsFrom(ip);
+  }
 }
 
 

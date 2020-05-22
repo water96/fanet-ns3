@@ -23,29 +23,24 @@ using namespace ns3;
 
 FanetRoutingExperiment::FanetRoutingExperiment()
   : m_total_sim_time(200.0),  //1
-    m_nsinks (1),
     m_txp (40),   //1
     m_traffic_model(NetTrafficCreator::Inst().GetDefaultModel()),  //1
-    m_mob_scenario(""),   //1
+    m_mob_scenario(FanetMobilityCreator::Inst().GetDefaultModel()),   //1
     // AODV
-    m_rout_prot(RoutingHelper::ROUTING_PROTOCOL::AODV),
-
+    m_rout_prot("AODV"),
     m_lossModelName ("ns3::FriisPropagationLossModel"),
     m_phyMode ("OfdmRate27MbpsBW10MHz"),
     m_nNodes (2),
     m_trName ("fanet-routing-compare"),
-    m_nodeSpeed (200),
-    m_verbose (0),
-    m_print_routingTables (true),
-    m_asciiTrace (1),
+    m_nodeSpeed (200.0),
+    m_asciiTrace (0),
     m_pcap (1),
     m_log (0),
     m_streamIndex (0),
-    m_adhocTxNodes ()
+    m_adhocTxNodes (),
+    m_prop_model_ptr(nullptr)
 {
-
-  m_routingHelper = CreateObject<RoutingHelper> ();
-
+  TracerBase::ResetAllTraceResults();
 }
 
 TypeId FanetRoutingExperiment::GetTypeId (void)
@@ -53,14 +48,38 @@ TypeId FanetRoutingExperiment::GetTypeId (void)
   static TypeId tid = TypeId ("FanetRoutingExperiment")
     .SetParent<ExperimentApp> ()
     .AddConstructor<FanetRoutingExperiment> ()
-    .AddAttribute ("Nodes", "Number of nodes in simulation",
+    .AddAttribute ("nodes", "Number of nodes in simulation",
                    UintegerValue (2),
                    MakeUintegerAccessor (&FanetRoutingExperiment::m_nNodes),
                    MakeUintegerChecker<uint32_t> (2, 100))
-    .AddAttribute ("Stream", "Seed of random number generation",
+    .AddAttribute ("stream", "Seed of random number generation",
                    UintegerValue (0),
                    MakeUintegerAccessor (&FanetRoutingExperiment::m_streamIndex),
                    MakeUintegerChecker<uint32_t> ())
+    .AddAttribute ("time", "Total simulation time",
+                   DoubleValue (),
+                   MakeDoubleAccessor (&FanetRoutingExperiment::m_total_sim_time),
+                   MakeDoubleChecker<double>(0.0, 1000.0))
+    .AddAttribute ("power", "Tx power",
+                   DoubleValue (40.0),
+                   MakeDoubleAccessor (&FanetRoutingExperiment::m_txp),
+                   MakeDoubleChecker<double>(0.0, 100.0))
+    .AddAttribute ("traffic", "Traffic model in the network",
+                   StringValue (NetTrafficCreator::Inst().GetDefaultModel()),
+                   MakeStringAccessor (&FanetRoutingExperiment::m_traffic_model),
+                   MakeStringChecker())
+    .AddAttribute ("mobility", "Mobility model in the network",
+                   StringValue (FanetMobilityCreator::Inst().GetDefaultModel()),
+                   MakeStringAccessor (&FanetRoutingExperiment::m_mob_scenario),
+                   MakeStringChecker())
+    .AddAttribute ("routing", "Routing protocol in the network",
+                   StringValue ("AODV"),
+                   MakeStringAccessor (&FanetRoutingExperiment::m_rout_prot),
+                   MakeStringChecker())
+    .AddAttribute ("speed", "Nodes speed",
+                   DoubleValue (200.0),
+                   MakeDoubleAccessor (&FanetRoutingExperiment::m_nodeSpeed),
+                   MakeDoubleChecker<double>(0.0, 400.0))
   ;
   return tid;
 }
@@ -69,6 +88,7 @@ TypeId FanetRoutingExperiment::GetTypeId (void)
 FanetRoutingExperiment::~FanetRoutingExperiment()
 {
   NetTrafficCreator::Inst().DestroyNetTrafficModel();
+  FanetMobilityCreator::Inst().DestroyMobilityModel();
   Names::Clear();
 }
 
@@ -76,7 +96,6 @@ void
 FanetRoutingExperiment::SetDefaultAttributeValues ()
 {
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue (m_phyMode));
-  m_mob_scenario = m_nodes_mobility.GetDefaultModel();
 }
 
 void
@@ -85,16 +104,6 @@ FanetRoutingExperiment::ParseCommandLineArguments (int argc, char **argv)
   CommandLine cmd;
 
   cmd.Parse (argc, argv);
-
-  std::string out_dir = ".";
-
-  std::string script_name = m_mob_scenario + "-" +
-                            std::to_string(static_cast<uint32_t>(m_rout_prot)) + "-" +
-                            std::to_string(m_nNodes) + "n-" +
-                            std::to_string(m_total_sim_time) + "s";
-  Script::Instance().SetScriptName(script_name);
-  Script::Instance().CreateOutputDir(out_dir);
-  Script::ChDir(Script::Instance().GetOutputDir());
 }
 
 void FanetRoutingExperiment::ConfigureNodes ()
@@ -149,7 +158,7 @@ void FanetRoutingExperiment::ConfigureDevices ()
                                       "ControlMode", StringValue (m_phyMode));
 
   // Set Tx Power
-  wifiPhy.Set ("TxPowerStart",DoubleValue (m_txp));
+  wifiPhy.Set ("TxPowerStart", DoubleValue (m_txp));
   wifiPhy.Set ("TxPowerEnd", DoubleValue (m_txp));
 
   // Setup net devices
@@ -187,12 +196,18 @@ void FanetRoutingExperiment::ConfigureDevices ()
   {
     wifiPhy.EnablePcapAll ("wifi-pcap");
   }
+
+  ns3::PointerValue ptr_loss;
+  channel->GetAttribute("PropagationLossModel", ptr_loss);
+
+  m_prop_model_ptr = ptr_loss.Get<PropagationLossModel>();
+
 }
 
 void FanetRoutingExperiment::ConfigureMobility ()
 {
-  m_nodes_mobility.Create(m_mob_scenario);
-  FanetMobility& mob = m_nodes_mobility.Inst();
+  FanetMobilityCreator::Inst().CreateMobilityModel(m_mob_scenario);
+  FanetMobility& mob = FanetMobilityCreator::Inst().GetMobilityModel();
 
   mob.SetStreamIndex(m_streamIndex);
   mob.SetSimulationTime(ns3::Seconds(m_total_sim_time));
@@ -203,41 +218,11 @@ void FanetRoutingExperiment::ConfigureMobility ()
 void FanetRoutingExperiment::ConfigureApplications ()
 {
 
-  m_routingHelper->Install(m_adhocTxNodes,
+  m_routingHelper.Install(m_adhocTxNodes,
                            m_adhocTxDevices,
                            m_adhocTxInterfaces,
                            m_total_sim_time,
-                           m_rout_prot,
-                           m_nsinks,
-                           m_print_routingTables);
-
-  switch (m_rout_prot)
-    {
-      case RoutingHelper::ROUTING_PROTOCOL::NONE:
-
-      break;
-      case RoutingHelper::ROUTING_PROTOCOL::OLSR:
-
-      break;
-      case RoutingHelper::ROUTING_PROTOCOL::AODV:
-
-        for(auto it = m_adhocTxNodes.Begin(); it != m_adhocTxNodes.End(); it++)
-        {
-          Ptr<Ipv4RoutingProtocol> routing = (*it)->GetObject<Ipv4RoutingProtocol>();
-          if(routing)
-          {
-            routing->SetAttribute("EnableHello", BooleanValue(false));
-          }
-        }
-
-      break;
-      case RoutingHelper::ROUTING_PROTOCOL::DSDV:
-
-      break;
-      case RoutingHelper::ROUTING_PROTOCOL::DSR:
-
-      break;
-    }
+                           m_rout_prot);
 
   //Create net traffic model
   NetTrafficCreator::Inst().CreateNetTrafficModel(m_traffic_model, m_streamIndex, m_total_sim_time);
@@ -284,7 +269,7 @@ void FanetRoutingExperiment::EnableLogComponent()
   Packet::EnablePrinting ();
 }
 
-ExpResults FanetRoutingExperiment::GetSimulationResults() const
+const ExpResults& FanetRoutingExperiment::GetSimulationResults() const
 {
   return m_results;
 }
@@ -292,19 +277,27 @@ ExpResults FanetRoutingExperiment::GetSimulationResults() const
 void FanetRoutingExperiment::ConfigureTracing ()
 {
   //=============================
-  m_nodes_mobility.Inst().ConfigureMobilityTracing();
+  FanetMobilityCreator::Inst().GetMobilityModel().ConfigureMobilityTracing();
   //=============================
 
-  m_routingHelper->SetLogging (m_log);
+  //=============================
+  NetTrafficCreator::Inst().GetNetTrafficModel().ConfigreTracing();
+  //=============================
+
+  //=============================
+  m_routingHelper.ConfigureTracing();
+  //=============================
 
   if(m_log)
   {
     EnableLogComponent();
   }
 
-  AsciiTraceHelper ascii;
-  MobilityHelper::EnableAsciiAll (ascii.CreateFileStream (m_trName + ".mob"));
-
+  if(m_asciiTrace)
+  {
+    AsciiTraceHelper ascii;
+    MobilityHelper::EnableAsciiAll (ascii.CreateFileStream (m_trName + ".mob"));
+  }
   //AnimationInterface anim ("animation.xml");  // where "animation.xml" is any arbitrary filenames
   //anim.SetMobilityPollInterval(Seconds(1.0));
   //anim.EnableWifiMacCounters(Time(0), Seconds(m_total_sim_time));
@@ -312,9 +305,7 @@ void FanetRoutingExperiment::ConfigureTracing ()
   //anim.EnableIpv4RouteTracking("anim_rt_tables.rt", Time(0), Seconds(m_total_sim_time), Seconds(1.0));
   //anim.EnableIpv4L3ProtocolCounters(Time(0), Seconds(m_total_sim_time));
 
-
   PointerValue tmp_ptr_val;
-
   //Through nodes
   for(auto it = m_adhocTxNodes.Begin(); it != m_adhocTxNodes.End(); it++)
   {
@@ -326,7 +317,8 @@ void FanetRoutingExperiment::ConfigureTracing ()
     Ptr<WifiPhy> phy = dev->GetPhy();
     if(phy)
     {
-      WifiPhyTracer* wifi_phy_tracer = new WifiPhyTracer();
+      phy->GetRxSensitivity();
+      ns3::Ptr<WifiPhyTracer> wifi_phy_tracer = CreateObject<WifiPhyTracer>();
       wifi_phy_tracer->CreateOutput(n_name + "-wifi-phy-drop.csv");
       phy->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&WifiPhyTracer::WifiPhyDropCb, wifi_phy_tracer));
       m_wifi_phy_tracers.push_back(wifi_phy_tracer);
@@ -338,7 +330,7 @@ void FanetRoutingExperiment::ConfigureTracing ()
     Ptr<WifiPhyStateHelper> state_hlp = DynamicCast<WifiPhyStateHelper>(tmp_ptr_val.Get<WifiPhyStateHelper>());
     if(state_hlp)
     {
-      WifiPhyStateTracer* wifi_state_tracer = new WifiPhyStateTracer();
+      ns3::Ptr<WifiPhyStateTracer> wifi_state_tracer = CreateObject<WifiPhyStateTracer>();
       wifi_state_tracer->CreateOutput("wifi-" + n_name + ".csv");
       state_hlp->TraceConnectWithoutContext("RxOk", MakeCallback(&WifiPhyStateTracer::RxOkCb, wifi_state_tracer));
       state_hlp->TraceConnectWithoutContext("RxError", MakeCallback(&WifiPhyStateTracer::RxErrorCb, wifi_state_tracer));
@@ -346,33 +338,26 @@ void FanetRoutingExperiment::ConfigureTracing ()
       m_wifi_state_tracers.push_back(wifi_state_tracer);
     }
     //=======================
+
+    //Mobility
+    Ptr<MobilityModel> node_mob = (n)->GetObject<MobilityModel>();
+    if(node_mob)
+    {
+      //add node to all mob trace
+      std::size_t s = n_name.find('-');
+      m_neib_tracer.AddNodeWifiAndMobility(n_name.substr(s+1), phy, node_mob);
+    }
   }
+
+  m_neib_tracer.SetPropModel(m_prop_model_ptr);
+  m_neib_tracer.SetDumpInterval(1.0);
+  m_neib_tracer.CreateOutput("adj.csv");
 
   //Through devices
   for(auto it = m_adhocTxDevices.Begin(); it != m_adhocTxDevices.End(); it++)
   {
 
   }
-
-  //Through ip interaces
-  for(auto it = m_adhocTxInterfaces.Begin(); it != m_adhocTxInterfaces.End(); it++)
-  {
-    Ptr<Ipv4> ip = it->first;
-    std::string n_name = Names::FindName(ip->GetNetDevice(it->second)->GetNode());
-    Ipv4L3ProtocolTracer* tmp = new Ipv4L3ProtocolTracer();
-    tmp->CreateOutput("ipv4-" + n_name + ".csv");
-    ip->TraceConnectWithoutContext("Tx", MakeCallback(&Ipv4L3ProtocolTracer::TxCb, tmp));
-    ip->TraceConnectWithoutContext("Rx", MakeCallback(&Ipv4L3ProtocolTracer::RxCb, tmp));
-    ip->TraceConnectWithoutContext("Drop", MakeCallback(&Ipv4L3ProtocolTracer::DropCb, tmp));
-    ip->TraceConnectWithoutContext("UnicastForward", MakeCallback(&Ipv4L3ProtocolTracer::UnicastForwardCb, tmp));
-    ip->TraceConnectWithoutContext("LocalDeliver", MakeCallback(&Ipv4L3ProtocolTracer::LocalDeliverCb, tmp));
-    m_ipv4_tracers.push_back(tmp);
-  }
-
-  //GlobalTracers
-  Ipv4L3ProtocolTracer::DumpStatsTo("all-network-stats-ipv4.csv");
-  ns3::Simulator::Schedule(ns3::Seconds(0.0), &Ipv4L3ProtocolTracer::StatsDumper, 1.0);
-  //=======================
 }
 
 void FanetRoutingExperiment::RunSimulation ()
@@ -381,18 +366,14 @@ void FanetRoutingExperiment::RunSimulation ()
 
   Simulator::Stop (Seconds (m_total_sim_time));
   Simulator::Run ();
-  LogComponentDisableAll(LogLevel::LOG_ALL);
   Simulator::Destroy ();
 }
 
 void FanetRoutingExperiment::ProcessOutputs ()
 {
-  //Close ipv4stats
-  Ipv4L3ProtocolTracer::Stop();
-
-  //GetResults
-  ExpResults& udp_res = NetTrafficCreator::Inst().GetNetTrafficModel().GetResultsMap();
-  m_results.insert(udp_res.begin(), udp_res.end());
+  //GetResults from all tracers objects
+  ExpResults r(TracerBase::GetAllTraceResults());
+  m_results.insert(r.begin(), r.end());
 
 }
 

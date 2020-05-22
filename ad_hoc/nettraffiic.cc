@@ -87,6 +87,7 @@ void NetTrafficCreator::DestroyNetTrafficModel()
   if(m_inst)
   {
     delete m_inst;
+    m_inst = nullptr;
   }
 }
 
@@ -111,11 +112,6 @@ double NetTraffic::GetTotalSimTime() const
   return m_total_time;
 }
 
-ExpResults& NetTraffic::GetResultsMap()
-{
-  return m_res;
-}
-
 //Ping
 PingTraffic::PingTraffic()
 {
@@ -128,6 +124,11 @@ NetTraffic* PingTraffic::Clone() const
 }
 
 PingTraffic::~PingTraffic(){}
+
+int PingTraffic::ConfigreTracing()
+{
+  return 1;
+}
 
 int PingTraffic::Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip_c)
 {
@@ -165,7 +166,7 @@ int PingTraffic::Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip
 //================================
 
 //UdpCbrTraffic
-UdpCbrTraffic::UdpCbrTraffic() : m_interval(1.0), m_pckt_size(64)
+UdpCbrTraffic::UdpCbrTraffic() : m_interval(1.0), m_pckt_size(64), m_pckt_tracer(nullptr)
 {
 
 }
@@ -216,20 +217,19 @@ int UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& 
                                     this, source_socket);
   }
 
-  m_pckt_tracer.CreateOutput("pdr-udp-cbr-traffic.csv");
-  m_pckt_tracer.SetStatsCollector(&m_stats);
-  m_pckt_tracer.SetDumpInterval(m_interval, GetTotalSimTime());
-  m_pckt_tracer.Start();
-
   return 0;
 }
 
-ExpResults& UdpCbrTraffic::GetResultsMap()
+int UdpCbrTraffic::ConfigreTracing()
 {
-  uint32_t cnter = m_pckt_tracer.GetConnectivityCnter();
-  double conn = (cnter * m_interval) / GetTotalSimTime();
-  m_res.insert(std::make_pair("RealConnectivity", std::to_string(conn)));
-  return m_res;
+  //Create trace object
+  m_pckt_tracer = CreateObject<PDRAndThroughputMetr>();
+  //
+
+  m_pckt_tracer->CreateOutput("pdr-udp-cbr-traffic.csv");
+  m_pckt_tracer->SetDumpInterval(m_interval, GetTotalSimTime());
+  m_pckt_tracer->Start();
+  return 0;
 }
 
 void UdpCbrTraffic::RxCb(ns3::Ptr<ns3::Socket> socket)
@@ -239,17 +239,15 @@ void UdpCbrTraffic::RxCb(ns3::Ptr<ns3::Socket> socket)
   while ((packet = socket->RecvFrom (srcAddress)))
   {
     // application data, for goodput
-    uint32_t RxBytes = packet->GetSize ();
-    m_stats.IncRxBytes (RxBytes);
-    m_stats.IncRxPkts ();
+    this->m_pckt_tracer->RxCb(packet->Copy(), socket);
   }
 }
 
 void UdpCbrTraffic::GenerateTraffic(ns3::Ptr<ns3::Socket> socket)
 {
-  socket->Send (Create<Packet> (m_pckt_size));
-  m_stats.IncTxPkts();
-  m_stats.IncTxBytes(m_pckt_size);
+  Ptr<Packet> p = Create<Packet>(m_pckt_size);
+  socket->Send (p);
+  this->m_pckt_tracer->TxCb(p->Copy(), socket);
   Simulator::Schedule (Seconds(m_interval), &UdpCbrTraffic::GenerateTraffic,
                        this, socket);
 }

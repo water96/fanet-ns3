@@ -16,46 +16,32 @@ public:
   static const double TOTAL_SIM_TIME;
   static const uint16_t PORT;
 
-  enum class ROUTING_PROTOCOL
-  {
-    NONE = 0u,
-    OLSR,
-    AODV,
-    DSDV,
-    DSR
-  };
-
-
   RoutingHelper ();
   virtual ~RoutingHelper ();
   void Install (ns3::NodeContainer & c,
                 ns3::NetDeviceContainer & d,
                 ns3::Ipv4InterfaceContainer & i,
                 double totalTime,
-                ROUTING_PROTOCOL protocol,
-                uint32_t nSinks,
-                int routingTables);
-  void OnOffTrace (std::string context, ns3::Ptr<const ns3::Packet> packet);
+                std::string protocol);
+
   StatsCollector & GetStatsCollector ();
-  void SetLogging (int log);
+  void ConfigureTracing ();
 
 private:
   void SetupRoutingProtocol (ns3::NodeContainer & c);
   void AssignIpAddresses (ns3::NetDeviceContainer & d,
                           ns3::Ipv4InterfaceContainer & adhocTxInterfaces);
-  void SetupRoutingMessages (ns3::NodeContainer & c,
-                             ns3::Ipv4InterfaceContainer & adhocTxInterfaces);
-  ns3::Ptr<ns3::Socket> SetupRoutingPacketReceive (ns3::Ipv4Address addr, ns3::Ptr<ns3::Node> node);
-  void ReceiveRoutingPacket (ns3::Ptr<ns3::Socket> socket);
+
+  std::vector<ns3::Ptr<Ipv4L3ProtocolTracer> > m_ipv4_tracers;
+  IPv4AllStatsTracer m_ip_lev_tracer;
+
+  ns3::NodeContainer m_nodes;
+  ns3::NetDeviceContainer m_devs;
+  ns3::Ipv4InterfaceContainer m_ifs;
 
   double m_TotalSimTime;        ///< seconds
-  ROUTING_PROTOCOL m_protocol;       ///< routing protocol; 0=NONE, 1=OLSR, 2=AODV, 3=DSDV, 4=DSR
-  uint32_t m_port;           ///< port
-  uint32_t m_nSinks;              ///< number of sink nodes (< all nodes)
-  int m_routingTables;      ///< dump routing table (at t=5 sec).  0=No, 1=Yes
+  std::string m_protocol;       ///< routing protocol; 0=NONE, 1=OLSR, 2=AODV, 3=DSDV, 4=DSR
   StatsCollector m_stats_collector; ///< routing statistics
-  std::string m_protocolName; ///< protocol name
-  int m_log; ///< log
 };
 
 

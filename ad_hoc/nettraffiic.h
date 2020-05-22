@@ -39,7 +39,6 @@ public:
 class NetTraffic
 {
 protected:
-  ExpResults m_res;
   virtual NetTraffic* Clone() const = 0;
 private:
   uint64_t m_index;
@@ -52,7 +51,7 @@ public:
   NetTraffic(const NetTraffic&) = delete;
 
   virtual int Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip_c) = 0;
-  virtual ExpResults& GetResultsMap();
+  virtual int ConfigreTracing() = 0;
 
   uint64_t GetStreamIndex() const;
   double GetTotalSimTime() const;
@@ -69,15 +68,14 @@ public:
   PingTraffic();
   virtual ~PingTraffic();
   virtual int Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip_c) override;
-
+  virtual int ConfigreTracing() override;
 };
 
 
 class UdpCbrTraffic : public NetTraffic
 {
 private:
-  PDRAndThroughputMetr m_pckt_tracer;
-  StatsCollector m_stats;
+  ns3::Ptr<PDRAndThroughputMetr> m_pckt_tracer;
   uint16_t m_pckt_size;
   double m_interval;
 
@@ -87,8 +85,8 @@ private:
 public:
   UdpCbrTraffic();
   virtual ~UdpCbrTraffic();
-  ExpResults& GetResultsMap() override;
   virtual int Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip_c) override;
+  virtual int ConfigreTracing() override;
   //to callbacks
   void RxCb(ns3::Ptr<ns3::Socket> socket);
 };

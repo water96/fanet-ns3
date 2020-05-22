@@ -3,13 +3,12 @@
 //Tracers
 const std::string TracerBase::m_delimeter = ",\t";
 const std::string TracerBase::m_q = "\"";
+ExpResults TracerBase::m_all;
 
 StatsCollector Ipv4L3ProtocolTracer::m_stats;
 std::ofstream Ipv4L3ProtocolTracer::m_stats_out;
 
 //
-
-
 StatsCollector::StatsCollector ()
   : m_RxBytes (0),
     m_cumulativeRxBytes (0),

@@ -48,7 +48,8 @@ unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ \
                     -l$$(NS3VER)-aodv-debug \
                     -l$$(NS3VER)-dsdv-debug \
                     -l$$(NS3VER)-dsr-debug \
-                    -l$$(NS3VER)-olsr-debug
+                    -l$$(NS3VER)-olsr-debug \
+                    -l$$(NS3VER)-propagation-debug
 
 message ($$LIBS)
 
