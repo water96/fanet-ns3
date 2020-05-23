@@ -30,6 +30,7 @@ class ScalarsByNodesTracer : public TracerBase
 {
 private:
   std::string m_cached_hdr;
+  std::vector<std::string> m_lines;
 public:
   static ns3::TypeId GetTypeId (void)
   {
@@ -45,19 +46,16 @@ public:
     m_cb_name_to_hdr_map.insert(std::make_pair("all", ss));
   }
 
-  void Dump(uint32_t n, const ExpResults& r)
+  void AddNewExpResults(uint32_t n, const ExpResults& r)
   {
-    std::string hdr, vals;
-    hdr = "nodes" + m_delimeter;
-    vals = std::to_string(n) + m_delimeter;
+    std::string vals = std::to_string(n);
+    std::string hdr = "nodes";
 
     for(const auto& it : r)
     {
-       hdr += it.first + m_delimeter;
-       vals += it.second + m_delimeter;
+       hdr += m_delimeter + it.first;
+       vals += m_delimeter + it.second;
     }
-    hdr = hdr.substr(0, hdr.length() - m_delimeter.length());
-    vals = vals.substr(0, vals.length() - m_delimeter.length());
 
     if(m_cached_hdr.length() == 0)
     {
@@ -68,7 +66,17 @@ public:
       NS_ASSERT(m_cached_hdr == hdr);
     }
 
-    m_cb_out_map.at("all") << hdr << std::endl << vals;
+    m_lines.push_back(vals);
+
+  }
+
+  void Dump()
+  {
+    m_cb_out_map.at("all") << m_cached_hdr << std::endl;
+    for(auto it : m_lines)
+    {
+      m_cb_out_map.at("all") << it << std::endl;
+    }
   }
 };
 
@@ -216,7 +224,7 @@ public:
       //mean
       res = std::accumulate(nums.second.begin(), nums.second.end(), 0.0);
       res /= nums.second.size();
-      new_name = "mean_" + nums.first;
+      new_name = nums.first;
       str_val = std::to_string(res);
       m_mean.insert(std::make_pair(new_name, str_val));
       hdr.append(new_name + m_delimeter);
@@ -240,20 +248,14 @@ public:
  *  - simulation area;
  */
 
-class App
-{
-private:
-public:
-};
-
 int main(int argc, char **argv)
 {
   //=====================================
   //LogComponentEnableAll (LogLevel::LOG_ALL);
   //=====================================
 
-  const uint32_t start_nodes = 4;
-  const uint32_t end_nodes = 4;
+  const uint32_t start_nodes = 2;
+  const uint32_t end_nodes = 16;
   const uint32_t step = 2;
 
   double total_time = 200.0;
@@ -275,7 +277,7 @@ int main(int argc, char **argv)
 
   //Tracing
   ScalarsByNodesTracer tr;
-  tr.CreateOutput("scalars-by-nodes.csv");
+  tr.CreateOutput("mean-scalars-by-nodes.csv");
   //=====================================
 
   for(uint32_t n = start_nodes; n <= end_nodes; n+=step)
@@ -322,10 +324,12 @@ int main(int argc, char **argv)
       statistics.Add(r);
     }
     statistics.Dump();
-    tr.Dump(n, statistics.m_mean);
+    tr.AddNewExpResults(n, statistics.m_mean);
 
     std::cout << "Done with " << exp_name << "\n=============================" << std::endl;
   }
+
+  tr.Dump();
 
   return 0;
 }

@@ -138,7 +138,10 @@ public:
     for(auto& it : m_cb_name_to_hdr_map)
     {
       m_cb_out_map.insert(std::make_pair(it.first, std::ofstream(it.first + "-" + post_fix)));
-      m_cb_out_map.at(it.first) << it.second << std::endl;
+      if(it.second.length())
+      {
+        m_cb_out_map.at(it.first) << it.second << std::endl;
+      }
     }
   }
 };
@@ -794,6 +797,8 @@ private:
   uint32_t m_dropped, m_forwarded;
   ns3::Time m_interval;
   ns3::EventId m_dump_event;
+
+  std::map<std::string, uint32_t> m_ip_forward_cnter_map;
   //
 public:
   static ns3::TypeId GetTypeId (void)
@@ -814,8 +819,14 @@ public:
                 << "rx_pckt" << TracerBase::m_delimeter
                 << "rx_bytes" << TracerBase::m_delimeter
                 << "pdr_all";
-
     m_cb_name_to_hdr_map.insert(std::make_pair("dump-stats", ss.str()));
+
+    std::string s;
+    s = "node_id" + TracerBase::m_delimeter
+      + "forw_pckts";
+    m_cb_name_to_hdr_map.insert(std::make_pair("ip-forwards-by-node", s));
+
+    ns3::Simulator::ScheduleDestroy(&IPv4AllStatsTracer::DumpIpForwardsStats, this);
   }
 
   void SetDumpInterval(double s)
@@ -825,13 +836,16 @@ public:
     m_dump_event = ns3::Simulator::Schedule(m_interval, &IPv4AllStatsTracer::StatsDumper, this);
   }
 
-  void AddCollectingStatsFrom(ns3::Ptr<ns3::Ipv4> ip)
+  void AddCollectingStatsFrom(ns3::Ptr<ns3::Ipv4> ip, const std::string n_id)
   {
     ip->TraceConnectWithoutContext("Tx", MakeCallback(&IPv4AllStatsTracer::TxCb, this));
     ip->TraceConnectWithoutContext("Rx", MakeCallback(&IPv4AllStatsTracer::RxCb, this));
     ip->TraceConnectWithoutContext("Drop", MakeCallback(&IPv4AllStatsTracer::DropCb, this));
     ip->TraceConnectWithoutContext("UnicastForward", MakeCallback(&IPv4AllStatsTracer::UnicastForwardCb, this));
     ip->TraceConnectWithoutContext("LocalDeliver", MakeCallback(&IPv4AllStatsTracer::LocalDeliverCb, this));
+
+    m_ip_forward_cnter_map.insert(std::make_pair(n_id, 0));
+    ip->TraceConnect("UnicastForward", n_id, MakeCallback(&IPv4AllStatsTracer::ForwardCnterCb, this));
   }
 
   void StatsDumper()
@@ -852,6 +866,16 @@ public:
                                   << std::endl;
 
     ns3::Simulator::Schedule(m_interval, &IPv4AllStatsTracer::StatsDumper, this);
+  }
+
+  void DumpIpForwardsStats()
+  {
+    for(auto& it : m_ip_forward_cnter_map)
+    {
+      m_cb_out_map.at("ip-forwards-by-node") << m_q << it.first << m_q << m_delimeter
+                                             << it.second
+                                             << std::endl;
+    }
   }
 
   //Callbacks
@@ -876,6 +900,10 @@ public:
   {
     m_stats.IncRxPkts();
     m_stats.IncRxBytes(p->GetSize());
+  }
+  void ForwardCnterCb(std::string n_id, const ns3::Ipv4Header & ip_hdr, ns3::Ptr<const ns3::Packet> p, uint32_t ifs)
+  {
+    m_ip_forward_cnter_map.at(n_id)++;
   }
   //
 

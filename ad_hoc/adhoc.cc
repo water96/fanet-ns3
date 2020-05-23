@@ -191,7 +191,7 @@ RoutingHelper::ConfigureTracing()
     ip->TraceConnectWithoutContext("UnicastForward", MakeCallback(&Ipv4L3ProtocolTracer::UnicastForwardCb, tmp));
     ip->TraceConnectWithoutContext("LocalDeliver", MakeCallback(&Ipv4L3ProtocolTracer::LocalDeliverCb, tmp));
     m_ipv4_tracers.push_back(tmp);
-    m_ip_lev_tracer.AddCollectingStatsFrom(ip);
+    m_ip_lev_tracer.AddCollectingStatsFrom(ip, n_name);
   }
 }
 

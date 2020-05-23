@@ -14,7 +14,7 @@ FanetMobilityCreator::FanetMobilityCreator() : m_inst(nullptr)
 {
   //TODO: add constant mobility
   m_models.insert(std::make_pair("RWP", new RWPFANETMobility));
-  m_models.insert(std::make_pair("CONST", new RWPFANETMobility));
+  m_models.insert(std::make_pair("CONST", new CONSTFANETMobility));
   m_models.insert(std::make_pair("GM", new GMFANETMobility));
 
   m_default = m_models.begin()->first;
@@ -272,6 +272,29 @@ CONSTFANETMobility::~CONSTFANETMobility()
 FanetMobility* CONSTFANETMobility::Clone() const
 {
   return new CONSTFANETMobility();
+}
+
+ns3::Ptr<ns3::PositionAllocator> CONSTFANETMobility::CreateInitialPositionAllocater()
+{
+  Ptr<GridPositionAllocator> initial_alloc = CreateObject<GridPositionAllocator>();
+  m_sindex += initial_alloc->AssignStreams(m_sindex);
+
+  double step = 1000.0;
+
+  NS_ASSERT( (m_nodes.GetN() * step) < m_area.x);
+
+  double center = m_area.x / 2.0;
+  double min_x;
+  min_x = center - step * (double)(m_nodes.GetN() - 1) / 2.0;
+
+  initial_alloc->SetZ(m_area.z);
+  initial_alloc->SetMinX(min_x);
+  initial_alloc->SetMinY(m_area.y);
+  initial_alloc->SetDeltaX(step);
+  initial_alloc->SetDeltaY(0.0);
+  initial_alloc->SetN(m_nodes.GetN());
+  initial_alloc->SetLayoutType(GridPositionAllocator::ROW_FIRST);
+  return ns3::DynamicCast<PositionAllocator>(initial_alloc);
 }
 
 void CONSTFANETMobility::Install(const ns3::NodeContainer& c)

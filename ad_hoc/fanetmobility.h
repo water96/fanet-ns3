@@ -96,6 +96,7 @@ class CONSTFANETMobility : public FanetMobility
 private:
 
   virtual FanetMobility* Clone() const override;
+  ns3::Ptr<ns3::PositionAllocator> CreateInitialPositionAllocater() override;
 public:
   CONSTFANETMobility() = default;
   virtual ~CONSTFANETMobility();
