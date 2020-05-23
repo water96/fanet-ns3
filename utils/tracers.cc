@@ -1,7 +1,7 @@
 #include "tracers.h"
 
 //Tracers
-const std::string TracerBase::m_delimeter = ",\t";
+const std::string TracerBase::m_delimeter = ",";
 const std::string TracerBase::m_q = "\"";
 ExpResults TracerBase::m_all;
 

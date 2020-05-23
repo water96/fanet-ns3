@@ -364,39 +364,6 @@ public:
   }
 };
 
-class PacketStatCollector
-{
-private:
-  std::ofstream m_out;
-  ns3::Address m_addr_to_collect;
-  uint32_t m_ip_addr;
-public:
-  PacketStatCollector(){}
-  ~PacketStatCollector()
-  {
-    if(m_out.is_open ())
-      m_out.close ();
-  }
-
-  void CreateOutput(const std::string& name)
-  {
-    m_out.open (name);
-  }
-
-  void CollectFrom(const ns3::Address& addr)
-  {
-    addr.CopyTo (reinterpret_cast<uint8_t*>(&m_ip_addr));
-  }
-
-  void Trace(const ns3::Ptr< const ns3::Packet > packet, const ns3::Address &srcAddress, const ns3::Address &destAddress)
-  {
-    uint8_t* buf = new uint8_t[srcAddress.GetLength ()];
-    srcAddress.CopyTo (buf);
-    if(std::memcmp (&m_ip_addr, buf, 4) == 0)
-      m_out << ns3::Simulator::Now ().GetSeconds () << "\t" << packet->GetSize () << std::endl;
-  }
-};
-
 class QueCalcer : public TracerBase
 {
 private:
@@ -435,7 +402,7 @@ public:
     double now = ns3::Simulator::Now ().GetSeconds ();
     double diff = now - que[packet];
     m_total_send += packet->GetSize ();
-    ofs << now << "\t" << diff << "\t" << m_total_send << std::endl;
+    ofs << now << m_delimeter << diff << m_delimeter << m_total_send << std::endl;
   }
 };
 
@@ -475,12 +442,12 @@ public:
   {
     std::ofstream& ofs = m_cb_out_map.at("CourseChange");
 
-    ofs << ns3::Simulator::Now ().GetSeconds () << "\t"
-        << model->GetPosition ().x << "\t"
-        << model->GetPosition ().y << "\t"
-        << model->GetVelocity ().GetLength () << "\t"
-        << model->GetDistanceFrom (ap_mobility) << "\t"
-        << ap_mobility->GetPosition ().x << "\t"
+    ofs << ns3::Simulator::Now ().GetSeconds () << m_delimeter
+        << model->GetPosition ().x << m_delimeter
+        << model->GetPosition ().y << m_delimeter
+        << model->GetVelocity ().GetLength () << m_delimeter
+        << model->GetDistanceFrom (ap_mobility) << m_delimeter
+        << ap_mobility->GetPosition ().x << m_delimeter
         << ap_mobility->GetPosition ().y
         << std::endl;
   }
@@ -600,13 +567,13 @@ public:
   {
     std::string ss;
 
-    ss = "Time,\tpckt_id,\tsnr";
+    ss = "Time" + m_delimeter + "pckt_id" + m_delimeter + "snr";
     m_cb_name_to_hdr_map.insert(std::make_pair("RxOkCb", ss));
 
-    ss = "Time,\tpckt_id,\tsnr";
+    ss = "Time" + m_delimeter + "pckt_id" + m_delimeter + "snr";
     m_cb_name_to_hdr_map.insert(std::make_pair("RxError", ss));
 
-    ss = "Time,\tpckt_id,\tsize,\tbtr,\tpw";
+    ss = "Time" + m_delimeter + "pckt_id" + m_delimeter + "size" + m_delimeter + "btr" + m_delimeter + "pw";
     m_cb_name_to_hdr_map.insert(std::make_pair("Tx", ss));
   }
   ~WifiPhyStateTracer() = default;
@@ -948,10 +915,10 @@ public:
   {
     std::string ss;
 
-    ss = "time,\ttx_all,\trx_all,\tthrput,\tpdr";
+    ss = "time" + m_delimeter + "tx_all" + m_delimeter + "rx_all" + m_delimeter + "thrput" + m_delimeter + "pdr";
     m_cb_name_to_hdr_map.insert(std::make_pair("DumpPDR", ss));
 
-    ss = "time,\ttx,\trx,\tp";
+    ss = "time" + m_delimeter + "tx" + m_delimeter + "rx" + m_delimeter + "p";
     m_cb_name_to_hdr_map.insert(std::make_pair("DumpConnectivity", ss));
 
     ss = "node_id" + m_delimeter + "tx" + m_delimeter + "rx";

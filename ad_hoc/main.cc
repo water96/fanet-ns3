@@ -233,18 +233,31 @@ public:
   }
 };
 
+/*
+ * It is possible to iterate through set of:
+ *  - nodes;
+ *  - nodes speeds;
+ *  - simulation area;
+ */
+
+class App
+{
+private:
+public:
+};
+
 int main(int argc, char **argv)
 {
   //=====================================
   //LogComponentEnableAll (LogLevel::LOG_ALL);
   //=====================================
 
-  const uint32_t start_nodes = 2;
-  const uint32_t end_nodes = 16;
+  const uint32_t start_nodes = 4;
+  const uint32_t end_nodes = 4;
   const uint32_t step = 2;
 
   double total_time = 200.0;
-  std::string mobility = "RWP";
+  std::string mobility = "GM";
   std::string routing = "AODV";
   std::string traffic = "UDP_CBR";
   double speed = 200.0;
@@ -308,7 +321,6 @@ int main(int argc, char **argv)
       scalar_of_one_impl.Dump(r);
       statistics.Add(r);
     }
-    //Скедуилть ивент в конструкторе базовом на вызов виртуального метода по дампу результатов в общий вектор результатов
     statistics.Dump();
     tr.Dump(n, statistics.m_mean);
 

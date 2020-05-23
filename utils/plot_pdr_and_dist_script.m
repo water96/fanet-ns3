@@ -1,3 +1,6 @@
+%use DumpPDR-pdr-udp-cbr-traffic.csv
+pdr_diff = diff(pdr);
+decr = find(pdr_diff < 0);
 subplot(2, 1, 1);
 plot(time, d, '-o', 'MarkerIndices', decr(1));
 grid on
