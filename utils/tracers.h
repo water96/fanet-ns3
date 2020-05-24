@@ -197,11 +197,10 @@ public:
 class AdjTracer : public TracerBase
 {
 private:
-  std::vector<std::pair<ns3::Ptr<ns3::WifiPhy>, ns3::Ptr<ns3::MobilityModel> > > m_nodes_wm;
+  std::map<ns3::Ptr<ns3::NetDevice>, std::set<ns3::Ptr<ns3::NetDevice> > > m_nodes_links;
   ns3::Time m_interval;
   ns3::EventId m_dump_event;
-  ns3::Ptr<ns3::PropagationLossModel> m_prop_mod;
-  uint32_t m_phy_connect_cnter;
+  uint32_t m_link_connect_cnter;
   uint32_t m_total_time;
 public:
   static ns3::TypeId GetTypeId (void)
@@ -212,27 +211,29 @@ public:
     return tid;
   }
 
-  AdjTracer() : m_interval(ns3::Seconds(1.0)), m_prop_mod(nullptr), m_phy_connect_cnter(0), m_total_time(0)
+  AdjTracer() : m_interval(ns3::Seconds(1.0)), m_link_connect_cnter(0), m_total_time(0)
   {
     std::string ss;
-
-    ss = "time";
-
     m_cb_name_to_hdr_map.insert(std::make_pair("node-deg", ss));
   }
 
-  void SetPropModel(ns3::Ptr<ns3::PropagationLossModel> mod)
+  void SetNodeDevices(ns3::NetDeviceContainer& devs)
   {
-    m_prop_mod = mod;
-  }
+    for(auto dev_it = devs.Begin(); dev_it != devs.End(); dev_it++)
+    {
+      std::set<ns3::Ptr<ns3::NetDevice> > v;
+      m_nodes_links.insert(std::make_pair(*dev_it, std::move(v)));
+    }
 
-  void AddNodeWifiAndMobility(std::string node_id, ns3::Ptr<ns3::WifiPhy> w, ns3::Ptr<ns3::MobilityModel> m)
-  {
-    m_nodes_wm.push_back(std::make_pair(w, m));
+    std::string hdr = "time";
 
-    std::string ss;
-    ss = ss + m_delimeter + "deg" + node_id;
-    m_cb_name_to_hdr_map.at("node-deg") += ss;
+    for(auto& it : m_nodes_links)
+    {
+      std::string node_id = ns3::Names::FindName(it.first->GetNode());
+      hdr += m_delimeter + "deg_" + node_id;
+    }
+
+    m_cb_out_map.at("node-deg") << hdr << std::endl;
   }
 
   void SetDumpInterval(double s)
@@ -249,51 +250,43 @@ public:
     ofs << ns3::Simulator::Now ().GetSeconds();
 
     bool conn = true;
-    for(auto& it : m_nodes_wm)
+    for(auto& it : m_nodes_links)
     {
-      uint16_t nei_num = 0;
-      double txp = it.first->GetTxPowerStart();
-      for(auto& nei : m_nodes_wm)
+      ofs << m_delimeter << it.second.size();
+      if(it.second.size() == 0)
       {
-        if(nei == it)
-        {
-          continue;
-        }
-        double dist = it.second->GetDistanceFrom(nei.second);
-        if( dist > 5000.0 )
-        {
-//          std::cout << "MNode";
-        }
-        double rxp = m_prop_mod->CalcRxPower(txp, it.second, nei.second);
-        double rx_sense = nei.first->GetRxSensitivity();
-        if(rxp >= rx_sense)
-        {
-          nei_num++;
-        }
-        else
-        {
-//          std::cout << "MNode";
-        }
+        conn = false;
       }
-
-      conn &= (bool)nei_num;
-
-      ofs << m_delimeter << nei_num;
+      it.second.clear();
     }
+
     ofs << std::endl;
 
     if(conn)
-      m_phy_connect_cnter++;
+      m_link_connect_cnter++;
     m_total_time++;
 
     ns3::Simulator::Schedule(m_interval, &AdjTracer::DumperCb, this);
   }
 
+  void RxCb(ns3::Ptr<ns3::NetDevice> rx_dev, const ns3::Address &from, ns3::Ptr<ns3::Packet> p)
+  {
+    auto find_it = std::find_if(m_nodes_links.begin(),
+                                m_nodes_links.end(),
+                                [from](const std::pair<ns3::Ptr<ns3::NetDevice>, std::set<ns3::Ptr<ns3::NetDevice> > >& p) -> bool {
+                                                                                                                            return (from == p.first->GetAddress());
+                                                                                                                         });
+    if(find_it != m_nodes_links.end())
+    {
+      NS_ASSERT(find_it->second.find(rx_dev) == find_it->second.end());
+      find_it->second.insert(rx_dev);
+    }
+  }
+
   virtual const ExpResults& _dump_results()
   {
-    double conn = (double) m_phy_connect_cnter / (double) m_total_time;
-    m_res.insert(std::make_pair("phy_conn", std::to_string(conn)));
-
+    double c = (double)m_link_connect_cnter / (double)m_total_time;
+    m_res.insert(std::make_pair("data_link_conn", std::to_string(c)));
     _insert_results_of_subtraces(m_res);
     return m_res;
   }

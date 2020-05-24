@@ -11,6 +11,9 @@
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/mobility-module.h"
 #include "ns3/v4ping.h"
+#include "ns3/arp-l3-protocol.h"
+#include "ns3/arp-header.h"
+#include "ns3/arp-queue-disc-item.h"
 
 #include "ns3/mobility-module.h"
 #include "ns3/applications-module.h"
@@ -26,7 +29,8 @@ NetTrafficCreator& NetTrafficCreator::Inst()
 NetTrafficCreator::NetTrafficCreator() : m_inst(nullptr)
 {
   m_models.insert(std::make_pair("UDP_CBR", new UdpCbrTraffic));
-  m_models.insert(std::make_pair("Ping", new UdpCbrTraffic));
+  m_models.insert(std::make_pair("Ping", new PingTraffic));
+  m_models.insert(std::make_pair("L3ND", new L3NodesDiscoverTraffic));
 
   m_default = m_models.begin()->first;
 }
@@ -130,7 +134,7 @@ int PingTraffic::ConfigreTracing()
   return 1;
 }
 
-int PingTraffic::Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip_c)
+int PingTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c)
 {
   if(nc.GetN() != ip_c.GetN())
   {
@@ -180,7 +184,7 @@ NetTraffic* UdpCbrTraffic::Clone() const
   return new UdpCbrTraffic();
 }
 
-int UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::Ipv4InterfaceContainer& ip_c)
+int UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c)
 {
   if(nc.GetN() != ip_c.GetN())
   {
@@ -253,3 +257,76 @@ void UdpCbrTraffic::GenerateTraffic(ns3::Ptr<ns3::Socket> socket)
 }
 
 //================================
+
+const uint16_t L3NodesDiscoverTraffic::PROT_NUMBER = 0x0f0f;
+
+//L3NodesDiscoverTraffic
+L3NodesDiscoverTraffic::L3NodesDiscoverTraffic() : m_interval(1.0), m_pckt_size(64)
+{
+
+}
+L3NodesDiscoverTraffic::~L3NodesDiscoverTraffic()
+{
+
+}
+
+NetTraffic* L3NodesDiscoverTraffic::Clone() const
+{
+  return new L3NodesDiscoverTraffic();
+}
+
+int L3NodesDiscoverTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c)
+{
+  if(nc.GetN() != ip_c.GetN() || (devs.GetN() != nc.GetN()))
+  {
+    return -1;
+  }
+  m_devs = devs;
+  //Random variable for start discovering
+  Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
+  var->SetStream(NetTraffic::GetStreamIndex());
+
+
+  for(auto ip_it = ip_c.Begin(); ip_it != ip_c.End(); ip_it++)
+  {
+    ns3::Ptr<NetDevice> dev = ip_it->first->GetNetDevice(ip_it->second);
+    Ptr<Node> n = dev->GetNode();
+    Ptr<TrafficControlLayer> tc = n->GetObject<TrafficControlLayer> ();
+    n->RegisterProtocolHandler(MakeCallback (&TrafficControlLayer::Receive, tc),
+                               PROT_NUMBER, dev);
+    tc->RegisterProtocolHandler(MakeCallback(&L3NodesDiscoverTraffic::ReceiveCb, this),
+                                PROT_NUMBER, dev);
+    ns3::Simulator::Schedule(ns3::Seconds(var->GetValue(0.1, 0.4)), &L3NodesDiscoverTraffic::TransmitCb, this, dev, tc, ip_it->first->GetAddress(ip_it->second, 0));
+  }
+
+  return 0;
+}
+
+void L3NodesDiscoverTraffic::TransmitCb(ns3::Ptr<ns3::NetDevice> dev, ns3::Ptr<ns3::TrafficControlLayer> tc, ns3::Ipv4InterfaceAddress ip_addr)
+{
+  ArpHeader hdr;
+  hdr.SetRequest (dev->GetAddress (), ip_addr.GetLocal(), dev->GetBroadcast (), ip_addr.GetBroadcast());
+  ns3::Ptr<Packet> p = Create<Packet>(m_pckt_size);
+  Ptr<ArpQueueDiscItem> item = Create<ArpQueueDiscItem>(p, dev->GetBroadcast (), PROT_NUMBER, hdr);
+  tc->Send(dev, item);
+
+  ns3::Simulator::Schedule(ns3::Seconds(m_interval), &L3NodesDiscoverTraffic::TransmitCb, this, dev, tc, ip_addr);
+}
+
+void L3NodesDiscoverTraffic::ReceiveCb(ns3::Ptr<ns3::NetDevice> device, ns3::Ptr<const ns3::Packet> p, uint16_t protocol, const ns3::Address &from,
+               const ns3::Address &to, ns3::NetDevice::PacketType packetType )
+{
+  if(m_adj_tracer)
+  {
+    m_adj_tracer->RxCb(device, from, p->Copy());
+  }
+}
+
+int L3NodesDiscoverTraffic::ConfigreTracing()
+{
+  m_adj_tracer = CreateObject<AdjTracer>();
+  m_adj_tracer->CreateOutput("potential.csv");
+  m_adj_tracer->SetNodeDevices(m_devs);
+  m_adj_tracer->SetDumpInterval(1.0);
+  return 0;
+}

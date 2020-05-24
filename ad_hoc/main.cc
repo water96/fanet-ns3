@@ -255,13 +255,13 @@ int main(int argc, char **argv)
   //=====================================
 
   const uint32_t start_nodes = 2;
-  const uint32_t end_nodes = 16;
+  const uint32_t end_nodes = 4;
   const uint32_t step = 2;
 
   double total_time = 200.0;
   std::string mobility = "GM";
   std::string routing = "AODV";
-  std::string traffic = "UDP_CBR";
+  std::string traffic = "L3ND";
   double speed = 200.0;
   uint32_t seed_num = 5;
 

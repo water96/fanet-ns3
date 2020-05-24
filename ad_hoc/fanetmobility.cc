@@ -143,7 +143,7 @@ void FanetMobility::ConfigureMobilityTracing()
     if(node_mob)
     {
       //add node to all mob trace
-      std::size_t s = n_name.find('-');
+      std::size_t s = n_name.find_last_of('n');
       m_all_nodes_mobility_trace->AddNodeMobilityModel(node_mob, n_name.substr(s+1));
     }
   }

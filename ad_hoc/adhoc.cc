@@ -127,10 +127,10 @@ RoutingHelper::AssignIpAddresses (NetDeviceContainer & d,
     std::string n = Names::FindName(ip->GetNetDevice(it->second)->GetNode());
     if(n.empty() == false)
     {
-      std::size_t s = n.find_last_of('-');
+      std::size_t s = n.find_last_of('n');
       if(s != std::string::npos)
       {
-        n = n.substr(s + 1, n.size() - s);
+        n = n.substr(s + 1);
       }
     }
     else

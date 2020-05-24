@@ -43,7 +43,6 @@ private:
   //callbacks
   std::vector<ns3::Ptr<WifiPhyTracer> > m_wifi_phy_tracers;
   std::vector<ns3::Ptr<WifiPhyStateTracer> > m_wifi_state_tracers;
-  AdjTracer m_neib_tracer;
   //============================
 
   //Usefull stuffs

@@ -115,7 +115,7 @@ void FanetRoutingExperiment::ConfigureNodes ()
   {
     ns3::Ptr<Node> n = *it;
     std::stringstream ss;
-    ss << "n-" << cntr;
+    ss << "n" << cntr;
     Names::Add(ss.str(), n);
     cntr++;
   }
@@ -171,10 +171,10 @@ void FanetRoutingExperiment::ConfigureDevices ()
     uint16_t num = cnter;
     if(n.empty() == false)
     {
-      std::size_t s = n.find_last_of('-');
+      std::size_t s = n.find_last_of('n');
       if(s != std::string::npos)
       {
-        n = n.substr(s + 1, n.size() - s);
+        n = n.substr(s + 1);
         num = std::stoi(n);
       }
     }
@@ -227,7 +227,7 @@ void FanetRoutingExperiment::ConfigureApplications ()
   //Create net traffic model
   NetTrafficCreator::Inst().CreateNetTrafficModel(m_traffic_model, m_streamIndex, m_total_sim_time);
 
-  NetTrafficCreator::Inst().GetNetTrafficModel().Install(m_adhocTxNodes, m_adhocTxInterfaces);
+  NetTrafficCreator::Inst().GetNetTrafficModel().Install(m_adhocTxNodes, m_adhocTxDevices, m_adhocTxInterfaces);
 
 //  Simulator::Schedule(Seconds(20.0), &Ipv4::SetDown, m_adhocTxInterfaces.Get(1).first, m_adhocTxInterfaces.Get(1).second);
 //  Simulator::Schedule(Seconds(27.0), &Ipv4::SetUp, m_adhocTxInterfaces.Get(1).first, m_adhocTxInterfaces.Get(1).second);
@@ -339,19 +339,7 @@ void FanetRoutingExperiment::ConfigureTracing ()
     }
     //=======================
 
-    //Mobility
-    Ptr<MobilityModel> node_mob = (n)->GetObject<MobilityModel>();
-    if(node_mob)
-    {
-      //add node to all mob trace
-      std::size_t s = n_name.find('-');
-      m_neib_tracer.AddNodeWifiAndMobility(n_name.substr(s+1), phy, node_mob);
-    }
   }
-
-  m_neib_tracer.SetPropModel(m_prop_model_ptr);
-  m_neib_tracer.SetDumpInterval(1.0);
-  m_neib_tracer.CreateOutput("adj.csv");
 
   //Through devices
   for(auto it = m_adhocTxDevices.Begin(); it != m_adhocTxDevices.End(); it++)
