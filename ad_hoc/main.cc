@@ -23,6 +23,7 @@
 #include "utils/tracers.h"
 #include "fanetrouting.h"
 #include "utils/script.h"
+#include "time.h"
 
 using namespace ns3;
 
@@ -241,66 +242,130 @@ public:
   }
 };
 
-/*
- * It is possible to iterate through set of:
- *  - nodes;
- *  - nodes speeds;
- *  - simulation area;
- */
+
+std::vector<uint32_t> ParseNodeStringCB(std::string val)
+{
+  std::vector<std::string> nums;
+  std::vector<uint32_t> ret;
+  utils::SplitString(val, "_", nums);
+  if(nums.empty())
+  {
+    ret.push_back(std::stoi(val));
+  }
+  else if(nums.size() == 3)
+  {
+    uint32_t step = std::stoi(nums[1]);
+    uint32_t end = std::stoi(nums[2]);
+    for(uint32_t i = std::stoi(nums[0]); i <=    end; i += step)
+    {
+      ret.push_back(i);
+    }
+  }
+  return ret;
+}
+
+std::vector<uint32_t> CreateSeedsNum(uint32_t num_seeds, bool true_random)
+{
+  std::vector<uint32_t> ret;
+  for(int i = 0; i < num_seeds; i++)
+  {
+    if(true_random)
+    {
+      ret.push_back(time(0));
+    }
+    else
+    {
+      ret.push_back(i);
+    }
+  }
+  return ret;
+}
 
 int main(int argc, char **argv)
 {
+
   //=====================================
   //LogComponentEnableAll (LogLevel::LOG_ALL);
   //=====================================
+  CommandLine cmd;
+  cmd.Usage ("FANET simulation program.\n");
 
-  const uint32_t start_nodes = 2;
-  const uint32_t end_nodes = 4;
-  const uint32_t step = 2;
+  std::string nodes_str = "10";
+  cmd.AddValue ("Nodes",  "Number of nodes", nodes_str);
+
+  std::string mobility = "RWP";
+  cmd.AddValue ("Mobility",  "Mobility model", mobility);
+
+  std::string routing = "AODV";
+  cmd.AddValue ("Routing", "Routing protocol", routing);
+
+  std::string traffic = "L3ND;UDP_CBR";
+  cmd.AddValue ("Traffic models",  "Traffic models", traffic);
 
   double total_time = 200.0;
-  std::string mobility = "GM";
-  std::string routing = "AODV";
-  std::string traffic = "L3ND";
+  cmd.AddValue ("Time", "Time to simulate", total_time);
+
   double speed = 200.0;
-  uint32_t seed_num = 5;
+  cmd.AddValue ("Speed", "Average speed of nodes", speed);
+
+  uint32_t seed_num = 2;
+  cmd.AddValue ("Tests", "Num of tests", seed_num);
+
+  bool random = false;
+  cmd.AddValue ("Random", "True random", random);
+
+  cmd.Parse (argc, argv);
+
+  std::vector<uint32_t> num_nodes = ParseNodeStringCB(nodes_str);
+  std::vector<uint32_t> seeds = CreateSeedsNum(seed_num, random);
 
   //Go to output dir
   std::string out_dir = Script::GetEnv("PWD");
   if(out_dir.length())
   {
     out_dir += "/out";
-    Script::MkDir(out_dir);
   }
+  else
+  {
+    out_dir += "./out";
+  }
+  Script::MkDir(out_dir);
+  std::string exp_name = mobility + "-" +
+                         routing + "-" +
+                         nodes_str + "n-" +
+                         std::to_string(total_time) + "s-" +
+                         std::to_string(speed) + "v";
+  out_dir += "/" + exp_name;
+  Script::MkDir(out_dir);
   Script::ChDir(out_dir);
   //=====================================
 
   //Tracing
   ScalarsByNodesTracer tr;
-  tr.CreateOutput("mean-scalars-by-nodes.csv");
+  tr.CreateOutput(exp_name + ".csv");
   //=====================================
 
-  for(uint32_t n = start_nodes; n <= end_nodes; n+=step)
+  for(auto n : num_nodes)
   {
     //Create exp dir
-    std::string exp_name = mobility + "-" +
+    std::string test_name = mobility + "-" +
                            routing + "-" +
                            std::to_string(n) + "n-" +
                            std::to_string(total_time) + "s";
-    std::cout << "Experiment: " << exp_name << std::endl;
-    std::string exp_dir = out_dir + "/" + exp_name;
-    Script::MkDir(exp_dir);
-    Script::ChDir(exp_dir);
-    std::cout << "Go to " << exp_dir << std::endl;
+    std::cout << "Experiment: " << test_name << std::endl;
+    std::string test_dir = out_dir + "/" + test_name;
+    Script::MkDir(test_dir);
+    Script::ChDir(test_dir);
+    std::cout << "Go to " << test_dir << std::endl;
 
     ScalarsStatisticTracer statistics;
     statistics.CreateOutput("scalars.csv");
     statistics.Reserv(seed_num);
 
-    for(uint32_t s = 0; s < seed_num; s++)
+    for(auto s : seeds)
     {
       std::cout << "\tSeed: " << s << std::endl;
-      std::string seed_dir = exp_dir + "/seed-" + std::to_string(s);
+      std::string seed_dir = test_dir + "/seed-" + std::to_string(s);
       Script::MkDir(seed_dir);
       Script::ChDir(seed_dir);
 
@@ -326,7 +391,7 @@ int main(int argc, char **argv)
     statistics.Dump();
     tr.AddNewExpResults(n, statistics.m_mean);
 
-    std::cout << "Done with " << exp_name << "\n=============================" << std::endl;
+    std::cout << "Done with " << test_name << "\n=============================" << std::endl;
   }
 
   tr.Dump();

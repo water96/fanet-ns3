@@ -4,6 +4,7 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += \
+        ../utils/graph.cc \
         adhoc.cc \
         experimentapp.cc \
         fanetmobility.cc \
@@ -19,6 +20,7 @@ INCLUDEPATH += $$PWD/../
 HEADERS += \
     $$PWD/../utils/tracers.h \
     $$PWD/../utils/script.h \
+    ../utils/graph.h \
     adhoc.h \
     experimentapp.h \
     fanetmobility.h \
@@ -48,7 +50,8 @@ unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ \
                     -l$$(NS3VER)-aodv-debug \
                     -l$$(NS3VER)-olsr-debug \
                     -l$$(NS3VER)-propagation-debug \
-                    -l$$(NS3VER)-traffic-control-debug
+                    -l$$(NS3VER)-traffic-control-debug \
+                    -l$$(NS3VER)-gpsr-debug
 
 message ($$LIBS)
 

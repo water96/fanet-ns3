@@ -49,6 +49,10 @@ private:
   ns3::Ptr<ns3::PropagationLossModel> m_prop_model_ptr;
   //============================
 
+  //============================
+  std::vector<ns3::Ptr<NetTraffic> > m_traffic_generators;
+  //============================
+
   std::string m_CSVfileName;
   std::string m_mob_scenario;
   std::string m_rout_prot;

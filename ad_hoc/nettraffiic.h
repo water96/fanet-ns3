@@ -12,32 +12,8 @@
 #include "ns3/traffic-control-layer.h"
 
 class NetTraffic;
-class NetTrafficCreator;
 
-class NetTrafficCreator
-{
-private:
-  std::map<std::string, NetTraffic*> m_models;
-  std::string m_default;
-
-  NetTraffic* m_inst;
-
-  NetTrafficCreator();
-public:
-  NetTrafficCreator(const NetTrafficCreator&) = delete;
-  NetTrafficCreator& operator=(const NetTrafficCreator&) = delete;
-  ~NetTrafficCreator();
-
-  static NetTrafficCreator& Inst();
-
-  std::string GetModelsList();
-  std::string GetDefaultModel();
-  int CreateNetTrafficModel(const std::string& model, uint64_t stream_index, double total_sim_time);
-  NetTraffic& GetNetTrafficModel();
-  void DestroyNetTrafficModel();
-};
-
-class NetTraffic
+class NetTraffic : public ns3::Object
 {
 protected:
   virtual NetTraffic* Clone() const = 0;
@@ -46,16 +22,24 @@ private:
   double m_total_time;
 
 public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("NetTraffic")
+      .SetParent<ns3::Object> ();
+    return tid;
+  }
+
   NetTraffic();
   virtual ~NetTraffic();
   NetTraffic& operator=(const NetTraffic&) = delete;
   NetTraffic(const NetTraffic&) = delete;
 
+  virtual void SetStreamIndex(uint32_t index);
+  virtual void SetSimulationTime(double t);
+  virtual uint64_t GetStreamIndex() const;
+  virtual double GetTotalSimTime() const;
   virtual int Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c) = 0;
   virtual int ConfigreTracing() = 0;
-
-  uint64_t GetStreamIndex() const;
-  double GetTotalSimTime() const;
 
   friend class NetTrafficCreator;
 };
@@ -66,6 +50,14 @@ private:
   std::vector<ns3::Ptr<PingTracer> > m_ping_trace;
   virtual NetTraffic* Clone() const override;
 public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("Ping")
+      .SetParent<NetTraffic> ()
+      .AddConstructor<PingTraffic> ();
+    return tid;
+  }
+
   PingTraffic();
   virtual ~PingTraffic();
   virtual int Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c) override;
@@ -84,6 +76,13 @@ private:
 
   virtual NetTraffic* Clone() const override;
 public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("UDP_CBR")
+      .SetParent<NetTraffic> ()
+      .AddConstructor<UdpCbrTraffic> ();
+    return tid;
+  }
   UdpCbrTraffic();
   virtual ~UdpCbrTraffic();
   virtual int Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c) override;
@@ -104,6 +103,14 @@ private:
   virtual NetTraffic* Clone() const override;
 
 public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("L3ND")
+      .SetParent<NetTraffic> ()
+      .AddConstructor<L3NodesDiscoverTraffic> ();
+    return tid;
+  }
+
   static const uint16_t PROT_NUMBER;
 
   L3NodesDiscoverTraffic();

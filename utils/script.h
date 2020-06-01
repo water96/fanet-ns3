@@ -2,6 +2,7 @@
 #define SCRIPT_H
 
 #include <string>
+#include <vector>
 
 class Script
 {
@@ -28,6 +29,12 @@ public:
   static const std::string DEFAULT_OUTPUT_DIR;
 
   //utils
-  static std::string GetBaseName(const std::string& path);
 };
+
+namespace utils {
+  std::string GetBaseName(const std::string& path);
+  void SplitString(const std::string& in, std::string delim, std::vector<std::string>& out_vec);
+  std::string TrimString(const std::string& s);
+}
+
 #endif // SCRIPT_H

@@ -27,6 +27,8 @@
 #include "ns3/wifi-module.h"
 #include "ns3/ip-l4-protocol.h"
 
+#include "utils/graph.h"
+#include "utils/script.h"
 
 typedef std::map<std::string, std::string> ExpResults;
 
@@ -197,7 +199,7 @@ public:
 class AdjTracer : public TracerBase
 {
 private:
-  std::map<ns3::Ptr<ns3::NetDevice>, std::set<ns3::Ptr<ns3::NetDevice> > > m_nodes_links;
+  std::map<ns3::Ptr<ns3::NetDevice>, std::vector<ns3::Ptr<ns3::NetDevice> > > m_nodes_links;
   ns3::Time m_interval;
   ns3::EventId m_dump_event;
   uint32_t m_link_connect_cnter;
@@ -221,7 +223,7 @@ public:
   {
     for(auto dev_it = devs.Begin(); dev_it != devs.End(); dev_it++)
     {
-      std::set<ns3::Ptr<ns3::NetDevice> > v;
+      std::vector<ns3::Ptr<ns3::NetDevice> > v;
       m_nodes_links.insert(std::make_pair(*dev_it, std::move(v)));
     }
 
@@ -232,6 +234,7 @@ public:
       std::string node_id = ns3::Names::FindName(it.first->GetNode());
       hdr += m_delimeter + "deg_" + node_id;
     }
+    hdr += m_delimeter + "c";   //current connectivity
 
     m_cb_out_map.at("node-deg") << hdr << std::endl;
   }
@@ -245,26 +248,36 @@ public:
 
   void DumperCb()
   {
+    m_total_time++;
     std::ofstream& ofs = m_cb_out_map.at("node-deg");
+    Graph<ns3::Ptr<ns3::NetDevice> > g;
 
     ofs << ns3::Simulator::Now ().GetSeconds();
 
     bool conn = true;
     for(auto& it : m_nodes_links)
     {
+      g.AddNodeAndItsLinks(it.first, it.second);
       ofs << m_delimeter << it.second.size();
       if(it.second.size() == 0)
       {
         conn = false;
       }
+
       it.second.clear();
     }
-
-    ofs << std::endl;
+    if(conn)
+    {
+      conn = g.IsConnected();
+    }
 
     if(conn)
       m_link_connect_cnter++;
-    m_total_time++;
+
+    double c = (double)m_link_connect_cnter / (double)m_total_time;
+
+    ofs << m_delimeter << c;
+    ofs << std::endl;
 
     ns3::Simulator::Schedule(m_interval, &AdjTracer::DumperCb, this);
   }
@@ -273,13 +286,13 @@ public:
   {
     auto find_it = std::find_if(m_nodes_links.begin(),
                                 m_nodes_links.end(),
-                                [from](const std::pair<ns3::Ptr<ns3::NetDevice>, std::set<ns3::Ptr<ns3::NetDevice> > >& p) -> bool {
+                                [from](const std::pair<ns3::Ptr<ns3::NetDevice>, std::vector<ns3::Ptr<ns3::NetDevice> > >& p) -> bool {
                                                                                                                             return (from == p.first->GetAddress());
                                                                                                                          });
     if(find_it != m_nodes_links.end())
     {
-      NS_ASSERT(find_it->second.find(rx_dev) == find_it->second.end());
-      find_it->second.insert(rx_dev);
+      NS_ASSERT(std::find(find_it->second.begin(), find_it->second.end(), rx_dev) == find_it->second.end());
+      find_it->second.push_back(rx_dev);
     }
   }
 
@@ -287,6 +300,160 @@ public:
   {
     double c = (double)m_link_connect_cnter / (double)m_total_time;
     m_res.insert(std::make_pair("data_link_conn", std::to_string(c)));
+    _insert_results_of_subtraces(m_res);
+    return m_res;
+  }
+};
+
+class NetworkAdjTracer : public TracerBase
+{
+private:
+  ns3::Ipv4InterfaceContainer m_ifs;
+  ns3::Time m_interval;
+  ns3::EventId m_dump_event;
+  uint32_t m_network_connect_cnter;
+  uint32_t m_total_time;
+public:
+  struct RoutingEntry
+  {
+    ns3::Ipv4Address dest;
+    ns3::Ipv4Address gateway;
+    ns3::Ipv4Address ifs;
+
+    std::vector<std::string> records;
+  };
+
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("NetworkAdjTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<NetworkAdjTracer> ();
+    return tid;
+  }
+
+  NetworkAdjTracer() : m_interval(ns3::Seconds(1.0)), m_network_connect_cnter(0), m_total_time(0)
+  {
+    std::string ss;
+    m_cb_name_to_hdr_map.insert(std::make_pair("node-deg", ss));
+  }
+
+  void SetNodeIfces(ns3::Ipv4InterfaceContainer& ifs)
+  {
+    m_ifs = ifs;
+
+    std::string hdr = "time";
+    for(auto it = m_ifs.Begin(); it != m_ifs.End(); it++)
+    {
+      NS_ASSERT(it->first->GetRoutingProtocol() != nullptr);
+
+      std::string node_id = ns3::Names::FindName(it->first->GetNetDevice(it->second)->GetNode());
+      hdr += m_delimeter + "deg_" + node_id;
+    }
+    hdr += m_delimeter + "c";   //current connectivity
+
+    m_cb_out_map.at("node-deg") << hdr << std::endl;
+  }
+
+  void SetDumpInterval(double s)
+  {
+    m_interval = ns3::Seconds(s);
+    m_dump_event.Cancel();
+    m_dump_event = ns3::Simulator::Schedule(m_interval, &NetworkAdjTracer::DumperCb, this);
+  }
+
+  std::vector<RoutingEntry> ParseRoutingTable(const std::string& table)
+  {
+    std::vector<RoutingEntry> ret;
+    std::size_t f = table.find("Destination");
+    if(f == std::string::npos)
+    {
+      return ret;
+    }
+
+    std::string local = table.substr(f);
+    std::vector<std::string> lines;
+    utils::SplitString(local, "\n", lines);
+
+    if(lines.empty())
+    {
+      return ret;
+    }
+
+    std::vector<std::string> colums;
+    utils::SplitString(lines.front(), "\t", colums);
+    if(colums.size() < 3)
+    {
+      return ret;
+    }
+
+    colums.clear();
+    for(auto it = lines.begin() + 1; it != lines.end(); it++)
+    {
+      if(it->empty())
+      {
+        continue;
+      }
+      utils::SplitString(*it, "\t", colums);
+      if(colums.size() < 3)
+      {
+        continue;
+      }
+
+      RoutingEntry re;
+      re.dest.Set(utils::TrimString(colums[0]).c_str());
+      re.gateway.Set(utils::TrimString(colums[1]).c_str());
+      re.ifs.Set(utils::TrimString(colums[2]).c_str());
+      re.records.insert(re.records.begin(), colums.begin(), colums.end());
+
+      ret.push_back(std::move(re));
+      colums.clear();
+    }
+    return ret;
+  }
+
+  void DumperCb()
+  {
+    std::ofstream& ofs = m_cb_out_map.at("node-deg");
+    m_total_time++;
+    Graph<ns3::Ipv4Address> g;
+
+    ofs << ns3::Simulator::Now ().GetSeconds();
+
+    for(auto it = m_ifs.Begin(); it != m_ifs.End(); it++)
+    {
+      std::stringstream ss;
+      ns3::OutputStreamWrapper owr(&ss);
+      ns3::Ptr<ns3::OutputStreamWrapper> owr_ptr(&owr);
+      ns3::Ptr<ns3::Ipv4RoutingProtocol> routing = it->first->GetRoutingProtocol();
+      routing->PrintRoutingTable(owr_ptr);
+
+      std::vector<RoutingEntry> routs = ParseRoutingTable(ss.str());
+
+      ns3::Ipv4InterfaceAddress local = it->first->GetAddress(it->second, 0);
+      for(auto& it : routs)
+      {
+        NS_ASSERT(it.ifs == local.GetLocal());
+        if(it.dest != local.GetBroadcast())
+        {
+          g.AddNodeAndItsLinks(it.ifs, it.gateway);
+        }
+      }
+      ofs << m_delimeter << g.GetNodeDegree(local.GetLocal());
+    }
+    if(g.IsConnected())
+    {
+      m_network_connect_cnter++;
+    }
+    double c = (double)m_network_connect_cnter / (double)m_total_time;
+    ofs << m_delimeter << c << std::endl;
+
+    ns3::Simulator::Schedule(m_interval, &NetworkAdjTracer::DumperCb, this);
+  }
+
+  virtual const ExpResults& _dump_results()
+  {
+    double c = (double)m_network_connect_cnter / (double)m_total_time;
+    m_res.insert(std::make_pair("real_net_conn", std::to_string(c)));
     _insert_results_of_subtraces(m_res);
     return m_res;
   }
@@ -918,8 +1085,10 @@ private:
   StatsCollector m_stats;
   ns3::Time m_interval;
   ns3::Time m_total;
-  uint32_t m_conn_cnter;
   double m_pdr_val;
+  ns3::EventId m_dump_event;
+  uint32_t m_total_time_cnter;
+  uint32_t m_connect_cnter;
 
   std::map<ns3::Address, StatsCollector> m_tx_rx_per_node;
 
@@ -932,14 +1101,13 @@ public:
     return tid;
   }
 
-  PDRAndThroughputMetr() : m_interval(ns3::Seconds(1.0)), m_conn_cnter(0)
+  PDRAndThroughputMetr() : m_interval(ns3::Seconds(1.0)), m_connect_cnter(0), m_total_time_cnter(0)
   {
     std::string ss;
-
     ss = "time" + m_delimeter + "tx_all" + m_delimeter + "rx_all" + m_delimeter + "thrput" + m_delimeter + "pdr";
     m_cb_name_to_hdr_map.insert(std::make_pair("DumpPDR", ss));
 
-    ss = "time" + m_delimeter + "tx" + m_delimeter + "rx" + m_delimeter + "p";
+    ss = "time" + m_delimeter + "tx" + m_delimeter + "rx" + m_delimeter + "с";
     m_cb_name_to_hdr_map.insert(std::make_pair("DumpConnectivity", ss));
 
     ss = "node_id" + m_delimeter + "tx" + m_delimeter + "rx";
@@ -974,11 +1142,8 @@ public:
   {
     m_interval = ns3::Seconds(sec);
     m_total = ns3::Seconds(total_time);
-  }
-  void Start()
-  {
-    ns3::Simulator::Schedule(ns3::Time(0), &PDRAndThroughputMetr::DumpStatistics, this);
-    ns3::Simulator::ScheduleDestroy(&PDRAndThroughputMetr::DumpTxRxPerNode, this);
+    m_dump_event.Cancel();
+    m_dump_event = ns3::Simulator::Schedule(m_interval, &PDRAndThroughputMetr::DumpStatistics, this);
   }
 
   void DumpTxRxPerNode()
@@ -999,6 +1164,7 @@ public:
   void DumpStatistics()
   {
     double now = ns3::Simulator::Now ().GetSeconds ();
+    m_total_time_cnter++;
     uint32_t bytes_rcv_interval = m_stats.GetRxBytes ();    //aggregated
     uint32_t packetsReceivedAll =  m_stats.GetCumulativeRxPkts();
     uint32_t packetsTransmitedAll =  m_stats.GetCumulativeTxPkts();
@@ -1019,15 +1185,12 @@ public:
     double pdr = 1.0;
     packetsReceivedAll =  m_stats.GetRxPkts();
     packetsTransmitedAll =  m_stats.GetTxPkts();
-    if(packetsReceivedAll == packetsTransmitedAll)
+    if(packetsTransmitedAll == packetsReceivedAll)
     {
-      m_conn_cnter++;
+      m_connect_cnter++;
     }
 
-    if(packetsTransmitedAll)
-    {
-      pdr = (double)packetsReceivedAll / (double)packetsTransmitedAll;
-    }
+    pdr = (double)m_connect_cnter / (double)m_total_time_cnter;
 
     m_cb_out_map.at("DumpConnectivity") << now << m_delimeter
                                         << packetsTransmitedAll << m_delimeter
@@ -1046,7 +1209,9 @@ public:
 
   virtual const ExpResults& _dump_results()
   {
-    double conn = (m_conn_cnter * m_interval.GetSeconds()) / m_total.GetSeconds();
+    DumpTxRxPerNode();
+
+    double conn = (double)m_connect_cnter / (double)m_total_time_cnter;
     m_res.insert(std::make_pair("udp_conn", std::to_string(conn)));
     m_res.insert(std::make_pair("udp_pdr", std::to_string(m_pdr_val)));
     m_res.insert(std::make_pair("udp_tx", std::to_string(m_stats.GetCumulativeTxPkts())));

@@ -34,6 +34,7 @@ private:
 
   std::vector<ns3::Ptr<Ipv4L3ProtocolTracer> > m_ipv4_tracers;
   IPv4AllStatsTracer m_ip_lev_tracer;
+  ns3::Ptr<NetworkAdjTracer> m_net_adj_tracer;
 
   ns3::NodeContainer m_nodes;
   ns3::NetDeviceContainer m_devs;

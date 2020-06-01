@@ -20,80 +20,9 @@
 
 using namespace ns3;
 
-NetTrafficCreator& NetTrafficCreator::Inst()
-{
-  static NetTrafficCreator inst;
-  return inst;
-}
-
-NetTrafficCreator::NetTrafficCreator() : m_inst(nullptr)
-{
-  m_models.insert(std::make_pair("UDP_CBR", new UdpCbrTraffic));
-  m_models.insert(std::make_pair("Ping", new PingTraffic));
-  m_models.insert(std::make_pair("L3ND", new L3NodesDiscoverTraffic));
-
-  m_default = m_models.begin()->first;
-}
-
-NetTrafficCreator::~NetTrafficCreator()
-{
-  for(auto& it : m_models)
-  {
-    delete it.second;
-  }
-
-  DestroyNetTrafficModel();
-}
-
-std::string NetTrafficCreator::GetDefaultModel()
-{
-  return m_default;
-}
-
-std::string NetTrafficCreator::GetModelsList()
-{
-  std::string ret;
-  for(auto& it : m_models)
-  {
-    ret += it.first + ",";
-  }
-
-  return ret.substr(0, ret.length() - 1);
-}
-
-int NetTrafficCreator::CreateNetTrafficModel(const std::string& model, uint64_t stream_index, double total_sim_time)
-{
-  if(m_inst)
-  {
-    return 1;
-  }
-
-  auto find_it = m_models.find(model);
-  if(find_it != m_models.end())
-  {
-    m_inst = find_it->second->Clone();
-    m_inst->m_total_time = total_sim_time;
-    m_inst->m_index = stream_index;
-    return 0;
-  }
-
-  return 1;
-}
-
-NetTraffic& NetTrafficCreator::GetNetTrafficModel()
-{
-  NS_ASSERT(m_inst != nullptr);
-  return *m_inst;
-}
-
-void NetTrafficCreator::DestroyNetTrafficModel()
-{
-  if(m_inst)
-  {
-    delete m_inst;
-    m_inst = nullptr;
-  }
-}
+NS_OBJECT_ENSURE_REGISTERED (UdpCbrTraffic);
+NS_OBJECT_ENSURE_REGISTERED (PingTraffic);
+NS_OBJECT_ENSURE_REGISTERED (L3NodesDiscoverTraffic);
 
 //==================================================
 
@@ -106,6 +35,17 @@ NetTraffic::~NetTraffic()
 {
 
 }
+
+void NetTraffic::SetStreamIndex(uint32_t index)
+{
+  m_index = index;
+}
+
+void NetTraffic::SetSimulationTime(double t)
+{
+  m_total_time = t;
+}
+
 uint64_t NetTraffic::GetStreamIndex() const
 {
   return m_index;
@@ -232,7 +172,6 @@ int UdpCbrTraffic::ConfigreTracing()
 
   m_pckt_tracer->CreateOutput("pdr-udp-cbr-traffic.csv");
   m_pckt_tracer->SetDumpInterval(m_interval, GetTotalSimTime());
-  m_pckt_tracer->Start();
   return 0;
 }
 

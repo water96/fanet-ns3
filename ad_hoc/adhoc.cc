@@ -6,6 +6,7 @@
 #include "ns3/dsdv-module.h"
 #include "ns3/dsr-module.h"
 #include "ns3/applications-module.h"
+#include "ns3/gpsr-module.h"
 
 using namespace ns3;
 
@@ -59,15 +60,15 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
   Ipv4RoutingHelper* routing = nullptr;
   Ptr<Ipv4RoutingProtocol> prot;
   const uint16_t prior = 100;
+  std::vector<std::pair<std::string, ns3::AttributeValue*> > attr_val_list;
 
   Ipv4ListRoutingHelper list;
   InternetStackHelper internet;
 
-  AsciiTraceHelper ascii;
-
   if(m_protocol == "AODV")
   {
     routing = new AodvHelper;
+    attr_val_list.push_back(std::make_pair("EnableHello", new BooleanValue(true)));
   }
   else if(m_protocol == "OLSR")
   {
@@ -75,7 +76,7 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
   }
   else if(m_protocol == "GPSR")
   {
-
+    routing = new GpsrHelper;
   }
   else
   {
@@ -84,17 +85,6 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
 
   if(routing)
   {
-    for (auto it = c.Begin(); it != c.End(); it++)
-    {
-      std::string n_name = Names::FindName(*it);
-      if(n_name.empty())
-      {
-        n_name = "node-" + std::to_string((*it)->GetId());
-      }
-      Ptr<OutputStreamWrapper> rtw = ascii.CreateFileStream (n_name + ".rt");
-      routing->PrintRoutingTableEvery(Seconds(1.0), *it, rtw);
-    }
-
     list.Add(*routing, prior);
     internet.SetRoutingHelper (list);
     delete routing;
@@ -102,8 +92,26 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
 
   internet.Install (c);
 
+  for(auto it = c.Begin(); it != c.End(); it++)
+  {
+    Ptr<Ipv4RoutingProtocol> routing = (*it)->GetObject<Ipv4RoutingProtocol>();
+    Ptr<aodv::RoutingProtocol> r = DynamicCast<aodv::RoutingProtocol>(routing);
+    if(routing)
+    {
+      for(auto vars : attr_val_list)
+      {
+        routing->SetAttribute(vars.first, *vars.second);
+      }
+    }
+  }
+
+  std::for_each(attr_val_list.begin(),
+                attr_val_list.end(),
+                [](std::pair<std::string, ns3::AttributeValue*>& p) {
+                                                                      delete p.second;
+                                                                    });
+
   //internet.EnablePcapIpv4All("ip-pcap");
-  //internet.EnableAsciiIpv4All("ip-ascii");
 }
 
 void
@@ -156,16 +164,10 @@ RoutingHelper::GetStatsCollector ()
 void
 RoutingHelper::ConfigureTracing()
 {
+    AsciiTraceHelper ascii;
+
   if(m_protocol == "AODV")
   {
-    for(auto it = m_nodes.Begin(); it != m_nodes.End(); it++)
-    {
-      Ptr<Ipv4RoutingProtocol> routing = (*it)->GetObject<Ipv4RoutingProtocol>();
-      if(routing)
-      {
-        routing->SetAttribute("EnableHello", BooleanValue(false));
-      }
-    }
   }
   else if(m_protocol == "OLSR")
   {
@@ -183,16 +185,13 @@ RoutingHelper::ConfigureTracing()
   {
     Ptr<Ipv4> ip = it->first;
     std::string n_name = Names::FindName(ip->GetNetDevice(it->second)->GetNode());
-    ns3::Ptr<Ipv4L3ProtocolTracer> tmp = CreateObject<Ipv4L3ProtocolTracer>();
-    tmp->CreateOutput("ipv4-" + n_name + ".csv");
-    ip->TraceConnectWithoutContext("Tx", MakeCallback(&Ipv4L3ProtocolTracer::TxCb, tmp));
-    ip->TraceConnectWithoutContext("Rx", MakeCallback(&Ipv4L3ProtocolTracer::RxCb, tmp));
-    ip->TraceConnectWithoutContext("Drop", MakeCallback(&Ipv4L3ProtocolTracer::DropCb, tmp));
-    ip->TraceConnectWithoutContext("UnicastForward", MakeCallback(&Ipv4L3ProtocolTracer::UnicastForwardCb, tmp));
-    ip->TraceConnectWithoutContext("LocalDeliver", MakeCallback(&Ipv4L3ProtocolTracer::LocalDeliverCb, tmp));
-    m_ipv4_tracers.push_back(tmp);
     m_ip_lev_tracer.AddCollectingStatsFrom(ip, n_name);
   }
+
+  m_net_adj_tracer = CreateObject<NetworkAdjTracer>();
+  m_net_adj_tracer->CreateOutput("network-real.csv");
+  m_net_adj_tracer->SetNodeIfces(m_ifs);
+  m_net_adj_tracer->SetDumpInterval(1.0);
 }
 
 
