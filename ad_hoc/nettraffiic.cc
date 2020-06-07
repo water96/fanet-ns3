@@ -26,6 +26,8 @@ NS_OBJECT_ENSURE_REGISTERED (L3NodesDiscoverTraffic);
 
 //==================================================
 
+static const double TIME_STEP = 0.03;
+
 NetTraffic::NetTraffic()
 {
 
@@ -139,6 +141,8 @@ int UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs
   std::string src_name_node = Names::FindName(src_node);
   Ipv4Address src_addr = ip_c.GetAddress(0);
 
+  double start = 0;
+  uint16_t cnter = 1;
   for(auto it = ip_c.Begin() + 1; it != ip_c.End(); it++)
   {
     Ptr<Node> n = it->first->GetNetDevice(it->second)->GetNode();
@@ -155,10 +159,12 @@ int UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs
     InetSocketAddress remote = InetSocketAddress (rem, 9);
     Ptr<Socket> source_socket = Socket::CreateSocket (src_node, tid);
     source_socket->Connect(remote);
+    m_pair_sockets.push_back(std::make_pair(source_socket, recvSink));
 
     Simulator::ScheduleWithContext (src_node->GetId (),
-                                    Seconds (var->GetValue(0.1, 0.3)), &UdpCbrTraffic::GenerateTraffic,
+                                    Seconds (start + var->GetValue(0.05, 0.4)), &UdpCbrTraffic::GenerateTraffic,
                                     this, source_socket);
+    cnter++;
   }
 
   return 0;
@@ -170,6 +176,7 @@ int UdpCbrTraffic::ConfigreTracing()
   m_pckt_tracer = CreateObject<PDRAndThroughputMetr>();
   //
 
+  m_pckt_tracer->SetSocketsPair(m_pair_sockets);
   m_pckt_tracer->CreateOutput("pdr-udp-cbr-traffic.csv");
   m_pckt_tracer->SetDumpInterval(m_interval, GetTotalSimTime());
   return 0;
@@ -200,7 +207,7 @@ void UdpCbrTraffic::GenerateTraffic(ns3::Ptr<ns3::Socket> socket)
 const uint16_t L3NodesDiscoverTraffic::PROT_NUMBER = 0x0f0f;
 
 //L3NodesDiscoverTraffic
-L3NodesDiscoverTraffic::L3NodesDiscoverTraffic() : m_interval(1.0), m_pckt_size(64)
+L3NodesDiscoverTraffic::L3NodesDiscoverTraffic() : m_interval(0.1), m_pckt_size(16)
 {
 
 }
@@ -225,17 +232,20 @@ int L3NodesDiscoverTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContai
   Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
   var->SetStream(NetTraffic::GetStreamIndex());
 
-
+  uint16_t cnter = 1;
+  double start = 0.5;
   for(auto ip_it = ip_c.Begin(); ip_it != ip_c.End(); ip_it++)
   {
     ns3::Ptr<NetDevice> dev = ip_it->first->GetNetDevice(ip_it->second);
     Ptr<Node> n = dev->GetNode();
+
     Ptr<TrafficControlLayer> tc = n->GetObject<TrafficControlLayer> ();
     n->RegisterProtocolHandler(MakeCallback (&TrafficControlLayer::Receive, tc),
                                PROT_NUMBER, dev);
     tc->RegisterProtocolHandler(MakeCallback(&L3NodesDiscoverTraffic::ReceiveCb, this),
                                 PROT_NUMBER, dev);
-    ns3::Simulator::Schedule(ns3::Seconds(var->GetValue(0.1, 0.4)), &L3NodesDiscoverTraffic::TransmitCb, this, dev, tc, ip_it->first->GetAddress(ip_it->second, 0));
+    ns3::Simulator::Schedule(ns3::Seconds(start + var->GetValue(0.0, 0.2)), &L3NodesDiscoverTraffic::TransmitCb, this, dev, tc, ip_it->first->GetAddress(ip_it->second, 0));
+    cnter++;
   }
 
   return 0;

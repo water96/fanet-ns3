@@ -23,6 +23,7 @@ private:
   std::map<uint32_t, std::set<uint32_t> > m_graph;
   uint32_t m_id_cnter;
   GraphConnectivity m_conn;
+  uint32_t m_full_node_connections;
 
   uint32_t AddNode(const T_data& node)
   {
@@ -52,16 +53,17 @@ private:
   }
 
 public:
-  Graph() : m_id_cnter(0), m_conn(GraphConnectivity::UNDEFINED) {}
+  Graph() : m_id_cnter(0), m_conn(GraphConnectivity::UNDEFINED), m_full_node_connections(0) {}
   ~Graph() {}
 
-  void AddNodeAndItsLinks(const T_data& node, const std::vector<T_data>& vec)
+  void AddNodeAndItsLinks(const T_data& node, const std::set<T_data>& vec)
   {
     uint32_t n_id = AddNode(node);
     for(auto i : vec)
     {
       uint32_t l = AddNode(i);
       m_graph.at(n_id).insert(l);
+      m_full_node_connections++;
     }
     m_conn = GraphConnectivity::UNDEFINED;
   }
@@ -71,6 +73,7 @@ public:
     uint32_t n_id = AddNode(node);
     uint32_t d = AddNode(dest);
     m_graph.at(n_id).insert(d);
+    m_full_node_connections++;
 
     m_conn = GraphConnectivity::UNDEFINED;
   }
@@ -88,20 +91,40 @@ public:
       return (m_conn == GraphConnectivity::CONNECTED);
     }
 
-    std::vector<uint8_t> vis1(m_id_cnter, 0);
-    std::vector<uint8_t> vis2(m_id_cnter, 0);
+    std::vector<uint8_t> vis(m_id_cnter, 0);
 
-    DFS(0, vis1);
-    DFS(0, vis2);
-
-    uint32_t s = std::accumulate(vis1.begin(), vis1.end(), 0);
+    DFS(0, vis);
+    uint32_t s = std::accumulate(vis.begin(), vis.end(), 0);
     if(s != m_id_cnter)
     {
       m_conn = GraphConnectivity::NOT_CONNECTED;
       return false;
     }
 
-    s = std::accumulate(vis2.begin(), vis2.end(), 0);
+    vis = std::vector<uint8_t>(m_id_cnter, 0);
+
+    auto g_bkcp = m_graph;
+    uint32_t a = 0;
+    std::vector<std::pair<uint32_t, uint32_t> > adj;
+    for(auto& i : m_graph)
+    {
+      uint32_t id = i.first;
+      std::for_each(i.second.begin(),
+                    i.second.end(),
+                    [&adj, id](uint32_t p) {
+                                             adj.push_back(std::make_pair(id, p));
+                                           });
+      i.second.clear();
+    }
+    //Create transpose m_graph
+    for(auto i : adj)
+    {
+      m_graph.at(i.second).insert(i.first);
+    }
+    DFS(0, vis);
+    m_graph = g_bkcp;
+
+    s = std::accumulate(vis.begin(), vis.end(), 0);
     if(s != m_id_cnter)
     {
       m_conn = GraphConnectivity::NOT_CONNECTED;

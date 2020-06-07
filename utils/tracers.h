@@ -7,6 +7,7 @@
 #include <map>
 #include <list>
 #include <algorithm>
+#include <limits>
 
 #include "ns3/core-module.h"
 #include "ns3/node.h"
@@ -199,11 +200,12 @@ public:
 class AdjTracer : public TracerBase
 {
 private:
-  std::map<ns3::Ptr<ns3::NetDevice>, std::vector<ns3::Ptr<ns3::NetDevice> > > m_nodes_links;
+  std::map<ns3::Ptr<ns3::NetDevice>, std::set<ns3::Ptr<ns3::NetDevice> > > m_nodes_links;
   ns3::Time m_interval;
   ns3::EventId m_dump_event;
   uint32_t m_link_connect_cnter;
   uint32_t m_total_time;
+
 public:
   static ns3::TypeId GetTypeId (void)
   {
@@ -221,11 +223,18 @@ public:
 
   void SetNodeDevices(ns3::NetDeviceContainer& devs)
   {
+    ns3::PointerValue tmp_ptr_val;
     for(auto dev_it = devs.Begin(); dev_it != devs.End(); dev_it++)
     {
-      std::vector<ns3::Ptr<ns3::NetDevice> > v;
+      std::set<ns3::Ptr<ns3::NetDevice> > v;
       m_nodes_links.insert(std::make_pair(*dev_it, std::move(v)));
-    }
+
+      ns3::Ptr<ns3::WifiNetDevice> dev = ns3::DynamicCast<ns3::WifiNetDevice>(*dev_it);
+      ns3::Ptr<ns3::WifiPhy> phy = dev->GetPhy();
+      std::string n_name = ns3::Names::FindName(dev->GetNode());
+      phy->GetAttribute("State", tmp_ptr_val);
+      ns3::Ptr<ns3::WifiPhyStateHelper> state_hlp = ns3::DynamicCast<ns3::WifiPhyStateHelper>(tmp_ptr_val.Get<ns3::WifiPhyStateHelper>());
+   }
 
     std::string hdr = "time";
 
@@ -259,20 +268,17 @@ public:
     {
       g.AddNodeAndItsLinks(it.first, it.second);
       ofs << m_delimeter << it.second.size();
-      if(it.second.size() == 0)
+      if(it.second.empty())
       {
         conn = false;
       }
-
       it.second.clear();
     }
-    if(conn)
-    {
-      conn = g.IsConnected();
-    }
 
-    if(conn)
+    if(conn && g.IsConnected())
+    {
       m_link_connect_cnter++;
+    }
 
     double c = (double)m_link_connect_cnter / (double)m_total_time;
 
@@ -286,13 +292,12 @@ public:
   {
     auto find_it = std::find_if(m_nodes_links.begin(),
                                 m_nodes_links.end(),
-                                [from](const std::pair<ns3::Ptr<ns3::NetDevice>, std::vector<ns3::Ptr<ns3::NetDevice> > >& p) -> bool {
-                                                                                                                            return (from == p.first->GetAddress());
+                                [from](const std::pair<ns3::Ptr<ns3::NetDevice>, std::set<ns3::Ptr<ns3::NetDevice> > >& t) -> bool {
+                                                                                                                            return (from == t.first->GetAddress());
                                                                                                                          });
     if(find_it != m_nodes_links.end())
     {
-      NS_ASSERT(std::find(find_it->second.begin(), find_it->second.end(), rx_dev) == find_it->second.end());
-      find_it->second.push_back(rx_dev);
+      find_it->second.insert(rx_dev);
     }
   }
 
@@ -300,6 +305,109 @@ public:
   {
     double c = (double)m_link_connect_cnter / (double)m_total_time;
     m_res.insert(std::make_pair("data_link_conn", std::to_string(c)));
+    _insert_results_of_subtraces(m_res);
+    return m_res;
+  }
+};
+
+class AdjTxPowerTracer : public TracerBase
+{
+private:
+  ns3::Time m_interval;
+  ns3::EventId m_dump_event;
+  uint32_t m_link_connect_cnter;
+  uint32_t m_total_time;
+
+  std::vector<std::pair<ns3::Ptr<ns3::WifiPhy>, ns3::Ptr<ns3::MobilityModel> > > m_nodes_mobility;
+  ns3::Ptr<ns3::PropagationLossModel> m_prop_model;
+
+public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("AdjTxPowerTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<AdjTxPowerTracer> ();
+    return tid;
+  }
+
+  AdjTxPowerTracer() : m_interval(ns3::Seconds(1.0)), m_link_connect_cnter(0), m_total_time(0)
+  {
+    std::string ss;
+    m_cb_name_to_hdr_map.insert(std::make_pair("node-deg", ss));
+  }
+
+  void SetNodesAndDelayModel(ns3::NetDeviceContainer& d, ns3::Ptr<ns3::PropagationLossModel> p)
+  {
+    m_prop_model = p;
+
+    m_nodes_mobility.clear();
+    std::string hdr_str = "time";
+    for(auto dev_it = d.Begin(); dev_it != d.End(); dev_it++)
+    {
+      ns3::Ptr<ns3::Node> node = (*dev_it)->GetNode();
+      std::string n_name = ns3::Names::FindName(node);
+      ns3::Ptr<ns3::MobilityModel> node_mob = node->GetObject<ns3::MobilityModel>();
+      ns3::Ptr<ns3::WifiNetDevice> dev = ns3::DynamicCast<ns3::WifiNetDevice>(*dev_it);
+      ns3::Ptr<ns3::WifiPhy> phy = dev->GetPhy();
+
+      m_nodes_mobility.push_back(std::make_pair(phy, node_mob));
+
+      hdr_str += m_delimeter + "deg_" + n_name;
+    }
+    hdr_str += m_delimeter + "c";
+
+    m_cb_out_map.at("node-deg") << hdr_str << std::endl;
+  }
+
+  void SetDumpInterval(double s)
+  {
+    m_interval = ns3::Seconds(s);
+    m_dump_event.Cancel();
+    m_dump_event = ns3::Simulator::Schedule(m_interval, &AdjTxPowerTracer::DumperCb, this);
+  }
+
+  void DumperCb()
+  {
+    m_total_time++;
+    std::ofstream& ofs = m_cb_out_map.at("node-deg");
+
+    ofs << ns3::Simulator::Now();
+
+    Graph<ns3::Ptr<ns3::WifiPhy> > g;
+    for(const auto& it : m_nodes_mobility)
+    {
+      uint16_t cnter = 0;
+      for(const auto& inner : m_nodes_mobility)
+      {
+        if(it == inner)
+        {
+          continue;
+        }
+
+        if(m_prop_model->CalcRxPower(it.first->GetTxPowerStart(), it.second, inner.second) >= inner.first->GetRxSensitivity())
+        {
+          g.AddNodeAndItsLinks(it.first, inner.first);
+          cnter++;
+        }
+      }
+      ofs << m_delimeter << cnter;
+    }
+
+    if(g.IsConnected())
+    {
+      m_link_connect_cnter++;
+    }
+
+    double c = (double)m_link_connect_cnter / (double)m_total_time;
+    ofs << m_delimeter << c << std::endl;
+
+    ns3::Simulator::Schedule(m_interval, &AdjTxPowerTracer::DumperCb, this);
+  }
+
+  virtual const ExpResults& _dump_results()
+  {
+    double c = (double)m_link_connect_cnter / (double)m_total_time;
+    m_res.insert(std::make_pair("tx_power_link_conn", std::to_string(c)));
     _insert_results_of_subtraces(m_res);
     return m_res;
   }
@@ -677,6 +785,7 @@ public:
         << p->GetUid()
         << std::endl;
   }
+
 };
 
 class WifiPhyTracer : public TracerBase
@@ -1091,6 +1200,7 @@ private:
   uint32_t m_connect_cnter;
 
   std::map<ns3::Address, StatsCollector> m_tx_rx_per_node;
+  std::vector<std::pair<uint32_t, ns3::Address> > m_tx_addr_pid;
 
 public:
   static ns3::TypeId GetTypeId (void)
@@ -1115,6 +1225,16 @@ public:
 
   }
 
+  void SetSocketsPair(const std::vector<std::pair<ns3::Ptr<ns3::Socket>, ns3::Ptr<ns3::Socket> > >& s)
+  {
+    for(const auto& i : s)
+    {
+      ns3::Address addr;
+      i.second->GetSockName(addr);
+      m_tx_rx_per_node.insert(std::make_pair(addr, StatsCollector()));
+    }
+  }
+
   void TxCb(ns3::Ptr<ns3::Packet> p, ns3::Ptr<const ns3::Socket> src)
   {
     m_stats.IncTxPkts();
@@ -1124,6 +1244,9 @@ public:
     src->GetPeerName(addr);
 
     m_tx_rx_per_node[addr].IncTxPkts();
+
+    //Store in vector all txed packets and remote address
+    m_tx_addr_pid.push_back(std::make_pair(p->GetUid(), addr));
   }
 
   void RxCb(ns3::Ptr<ns3::Packet> p, ns3::Ptr<const ns3::Socket> local)
@@ -1136,6 +1259,19 @@ public:
     local->GetSockName(addr);
 
     m_tx_rx_per_node[addr].IncRxPkts();
+
+    uint32_t p_id_rx = p->GetUid();
+    auto find_it = std::find_if(m_tx_addr_pid.begin(),
+                                m_tx_addr_pid.end(),
+                                [p_id_rx](const std::pair<uint32_t, ns3::Address>& pr ) -> bool
+                                {
+                                  return (p_id_rx == pr.first);
+                                });
+
+    if(find_it != m_tx_addr_pid.end())
+    {
+      m_tx_addr_pid.erase(find_it);
+    }
   }
 
   void SetDumpInterval(double sec, double total_time)
@@ -1185,10 +1321,13 @@ public:
     double pdr = 1.0;
     packetsReceivedAll =  m_stats.GetRxPkts();
     packetsTransmitedAll =  m_stats.GetTxPkts();
-    if(packetsTransmitedAll == packetsReceivedAll)
+
+    //if(packetsReceivedAll >= packetsTransmitedAll)
+    if(m_tx_addr_pid.empty())
     {
       m_connect_cnter++;
     }
+    m_tx_addr_pid.clear();
 
     pdr = (double)m_connect_cnter / (double)m_total_time_cnter;
 

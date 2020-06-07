@@ -1,3 +1,9 @@
 #!/bin/bash
-
-while ps -p 24431; do sleep 60; done ; shutdown -h
+start="$(date)"
+while ps -p 8816;
+do 
+	sleep 30
+done
+fin="$(date)"
+echo "Start at ${start}, finist at ${fin}"
+shutdown -h

@@ -68,7 +68,7 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
   if(m_protocol == "AODV")
   {
     routing = new AodvHelper;
-    attr_val_list.push_back(std::make_pair("EnableHello", new BooleanValue(true)));
+    attr_val_list.push_back(std::make_pair("EnableHello", new BooleanValue(false)));
   }
   else if(m_protocol == "OLSR")
   {

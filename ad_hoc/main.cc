@@ -242,41 +242,12 @@ public:
   }
 };
 
-
-std::vector<uint32_t> ParseNodeStringCB(std::string val)
-{
-  std::vector<std::string> nums;
-  std::vector<uint32_t> ret;
-  utils::SplitString(val, "_", nums);
-  if(nums.empty())
-  {
-    ret.push_back(std::stoi(val));
-  }
-  else if(nums.size() == 3)
-  {
-    uint32_t step = std::stoi(nums[1]);
-    uint32_t end = std::stoi(nums[2]);
-    for(uint32_t i = std::stoi(nums[0]); i <=    end; i += step)
-    {
-      ret.push_back(i);
-    }
-  }
-  return ret;
-}
-
-std::vector<uint32_t> CreateSeedsNum(uint32_t num_seeds, bool true_random)
+std::vector<uint32_t> CreateSeedsNum(uint32_t num_seeds)
 {
   std::vector<uint32_t> ret;
   for(int i = 0; i < num_seeds; i++)
   {
-    if(true_random)
-    {
-      ret.push_back(time(0));
-    }
-    else
-    {
-      ret.push_back(i);
-    }
+    ret.push_back(i);
   }
   return ret;
 }
@@ -290,111 +261,111 @@ int main(int argc, char **argv)
   CommandLine cmd;
   cmd.Usage ("FANET simulation program.\n");
 
-  std::string nodes_str = "10";
-  cmd.AddValue ("Nodes",  "Number of nodes", nodes_str);
+  uint32_t num_nodes = 2;
+  cmd.AddValue ("nodes",  "Number of nodes", num_nodes);
 
   std::string mobility = "RWP";
-  cmd.AddValue ("Mobility",  "Mobility model", mobility);
+  cmd.AddValue ("mobility",  "Mobility model", mobility);
 
   std::string routing = "AODV";
-  cmd.AddValue ("Routing", "Routing protocol", routing);
+  cmd.AddValue ("routing", "Routing protocol", routing);
 
   std::string traffic = "L3ND;UDP_CBR";
-  cmd.AddValue ("Traffic models",  "Traffic models", traffic);
+  cmd.AddValue ("traffic-models",  "Traffic models", traffic);
 
   double total_time = 200.0;
-  cmd.AddValue ("Time", "Time to simulate", total_time);
+  cmd.AddValue ("time", "Time to simulate", total_time);
 
   double speed = 200.0;
-  cmd.AddValue ("Speed", "Average speed of nodes", speed);
+  cmd.AddValue ("speed", "Average speed of nodes", speed);
 
-  uint32_t seed_num = 2;
-  cmd.AddValue ("Tests", "Num of tests", seed_num);
+  uint32_t seed_num = 1;
+  cmd.AddValue ("seed", "Seed number", seed_num);
 
-  bool random = false;
-  cmd.AddValue ("Random", "True random", random);
+  int num_of_tests = -1;
+  cmd.AddValue ("tests", "Number of tests (seed arg will be ignored)", num_of_tests);
+
+  bool calc_stats = false;
+  cmd.AddValue ("calc", "Calculate stats", calc_stats);
+
+  std::string out_dir = Script::GetEnv("PWD") + "/out";
+  cmd.AddValue ("out-dir", "Output directory", out_dir);
 
   cmd.Parse (argc, argv);
 
-  std::vector<uint32_t> num_nodes = ParseNodeStringCB(nodes_str);
-  std::vector<uint32_t> seeds = CreateSeedsNum(seed_num, random);
+  std::vector<uint32_t> seeds;
 
-  //Go to output dir
-  std::string out_dir = Script::GetEnv("PWD");
-  if(out_dir.length())
+  if(num_of_tests != -1)
   {
-    out_dir += "/out";
+    seeds = CreateSeedsNum(num_of_tests);
   }
   else
   {
-    out_dir += "./out";
+    seeds.push_back(seed_num);
   }
-  Script::MkDir(out_dir);
+
+  //Go to output dir
+  if(Script::MkDir(out_dir) != 0)
+  {
+    exit(1);
+  }
   std::string exp_name = mobility + "-" +
                          routing + "-" +
-                         nodes_str + "n-" +
-                         std::to_string(total_time) + "s-" +
+                         std::to_string(num_nodes) + "n-" +
                          std::to_string(speed) + "v";
   out_dir += "/" + exp_name;
-  Script::MkDir(out_dir);
-  Script::ChDir(out_dir);
-  //=====================================
-
-  //Tracing
-  ScalarsByNodesTracer tr;
-  tr.CreateOutput(exp_name + ".csv");
-  //=====================================
-
-  for(auto n : num_nodes)
+  int r = Script::MkDir(out_dir);
+  r |= Script::ChDir(out_dir);
+  if(r)
   {
-    //Create exp dir
-    std::string test_name = mobility + "-" +
-                           routing + "-" +
-                           std::to_string(n) + "n-" +
-                           std::to_string(total_time) + "s";
-    std::cout << "Experiment: " << test_name << std::endl;
-    std::string test_dir = out_dir + "/" + test_name;
-    Script::MkDir(test_dir);
-    Script::ChDir(test_dir);
-    std::cout << "Go to " << test_dir << std::endl;
-
-    ScalarsStatisticTracer statistics;
-    statistics.CreateOutput("scalars.csv");
-    statistics.Reserv(seed_num);
-
-    for(auto s : seeds)
-    {
-      std::cout << "\tSeed: " << s << std::endl;
-      std::string seed_dir = test_dir + "/seed-" + std::to_string(s);
-      Script::MkDir(seed_dir);
-      Script::ChDir(seed_dir);
-
-      ScalarsTracer scalar_of_one_impl;
-      scalar_of_one_impl.CreateOutput("impl.csv");
-
-      Ptr<FanetRoutingExperiment> exp = CreateObject<FanetRoutingExperiment>();
-
-      exp->SetAttribute("nodes", UintegerValue(n));
-      exp->SetAttribute("stream", UintegerValue(0));
-      exp->SetAttribute("time", DoubleValue(total_time));
-      exp->SetAttribute("mobility", StringValue(mobility));
-      exp->SetAttribute("traffic", StringValue(traffic));
-      exp->SetAttribute("routing", StringValue(routing));
-      exp->SetAttribute("speed", DoubleValue(speed));
-      exp->Simulate(argc, argv);
-
-      const ExpResults& r = exp->GetSimulationResults();
-
-      scalar_of_one_impl.Dump(r);
-      statistics.Add(r);
-    }
-    statistics.Dump();
-    tr.AddNewExpResults(n, statistics.m_mean);
-
-    std::cout << "Done with " << test_name << "\n=============================" << std::endl;
+    exit(1);
   }
 
-  tr.Dump();
+  std::cout << "Experiment: " << exp_name << std::endl;
+  std::cout << "Go to " << out_dir << std::endl;
+  //=====================================
+  ScalarsStatisticTracer statistics;
+  if(calc_stats)
+  {
+    statistics.CreateOutput("scalars.csv");
+    statistics.Reserv(seed_num);
+  }
+  for(auto s : seeds)
+  {
+    std::cout << "\tSeed: " << s << std::endl;
+    std::string seed_dir = out_dir + "/seed-" + std::to_string(s);
+    Script::MkDir(seed_dir);
+    Script::ChDir(seed_dir);
+
+    ScalarsTracer scalar_of_one_impl;
+    scalar_of_one_impl.CreateOutput("impl.csv");
+
+    Ptr<FanetRoutingExperiment> exp = CreateObject<FanetRoutingExperiment>();
+
+    exp->SetAttribute("nodes", UintegerValue(num_nodes));
+    exp->SetAttribute("stream", UintegerValue(s));
+    exp->SetAttribute("time", DoubleValue(total_time));
+    exp->SetAttribute("mobility", StringValue(mobility));
+    exp->SetAttribute("traffic", StringValue(traffic));
+    exp->SetAttribute("routing", StringValue(routing));
+    exp->SetAttribute("speed", DoubleValue(speed));
+    exp->Simulate(argc, argv);
+
+    const ExpResults& r = exp->GetSimulationResults();
+
+    scalar_of_one_impl.Dump(r);
+
+    if(calc_stats)
+    {
+      statistics.Add(r);
+    }
+  }
+
+  if(calc_stats)
+  {
+    statistics.Dump();
+  }
+  std::cout << "Done with " << exp_name << "\n=============================" << std::endl;
 
   return 0;
 }

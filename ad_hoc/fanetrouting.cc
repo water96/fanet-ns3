@@ -28,6 +28,7 @@ FanetRoutingExperiment::FanetRoutingExperiment()
     m_mob_scenario(FanetMobilityCreator::Inst().GetDefaultModel()),   //1
     // AODV
     m_rout_prot("AODV"),
+    //m_lossModelName ("ns3::RangePropagationLossModel"),
     m_lossModelName ("ns3::FriisPropagationLossModel"),
     m_phyMode ("OfdmRate27MbpsBW10MHz"),
     m_nNodes (2),
@@ -132,7 +133,7 @@ void FanetRoutingExperiment::ConfigureDevices ()
   // Setup propagation models
   YansWifiChannelHelper wifiChannel;
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  wifiChannel.AddPropagationLoss (m_lossModelName, "Frequency", DoubleValue (freq));
+  wifiChannel.AddPropagationLoss (m_lossModelName);
 
   // the channel
   Ptr<YansWifiChannel> channel = wifiChannel.Create ();
@@ -198,6 +199,14 @@ void FanetRoutingExperiment::ConfigureDevices ()
   channel->GetAttribute("PropagationLossModel", ptr_loss);
 
   m_prop_model_ptr = ptr_loss.Get<PropagationLossModel>();
+  if(m_lossModelName == "ns3::RangePropagationLossModel")
+  {
+    m_prop_model_ptr->SetAttribute("MaxRange", ns3::DoubleValue(1500.0));
+  }
+  else if(m_lossModelName == "ns3::FriisPropagationLossModel")
+  {
+    m_prop_model_ptr->SetAttribute("Frequency", ns3::DoubleValue(freq));
+  }
 
 }
 
@@ -225,6 +234,11 @@ void FanetRoutingExperiment::ConfigureApplications ()
   //apps
   std::vector<std::string> traffic_apps_id;
   utils::SplitString(m_traffic_model, ";", traffic_apps_id);
+
+  if(traffic_apps_id.empty())
+  {
+    traffic_apps_id.push_back(m_traffic_model);
+  }
 
   for(auto it : traffic_apps_id)
   {
@@ -295,6 +309,13 @@ void FanetRoutingExperiment::ConfigureTracing ()
   m_routingHelper.ConfigureTracing();
   //=============================
 
+  //=============================
+//  m_adj_tx_tracer = CreateObject<AdjTxPowerTracer>();
+//  m_adj_tx_tracer->SetDumpInterval(1.0);
+//  m_adj_tx_tracer->CreateOutput("tx-power.csv");
+//  m_adj_tx_tracer->SetNodesAndDelayModel(m_adhocTxDevices, m_prop_model_ptr);
+  //=============================
+
   if(m_log)
   {
     EnableLogComponent();
@@ -305,45 +326,10 @@ void FanetRoutingExperiment::ConfigureTracing ()
     AsciiTraceHelper ascii;
     MobilityHelper::EnableAsciiAll (ascii.CreateFileStream (m_trName + ".mob"));
   }
-  //AnimationInterface anim ("animation.xml");  // where "animation.xml" is any arbitrary filenames
-  //anim.SetMobilityPollInterval(Seconds(1.0));
-  //anim.EnableWifiMacCounters(Time(0), Seconds(m_total_sim_time));
-  //anim.EnableWifiPhyCounters(Time(0), Seconds(m_total_sim_time));
-  //anim.EnableIpv4RouteTracking("anim_rt_tables.rt", Time(0), Seconds(m_total_sim_time), Seconds(1.0));
-  //anim.EnableIpv4L3ProtocolCounters(Time(0), Seconds(m_total_sim_time));
 
-  PointerValue tmp_ptr_val;
   //Through nodes
   for(auto it = m_adhocTxNodes.Begin(); it != m_adhocTxNodes.End(); it++)
   {
-    Ptr<Node> n = *it;
-    std::string n_name = Names::FindName(n);
-
-    //Wifi Phy
-    Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice>(n->GetDevice(0));
-    Ptr<WifiPhy> phy = dev->GetPhy();
-    if(phy)
-    {
-//      ns3::Ptr<WifiPhyTracer> wifi_phy_tracer = CreateObject<WifiPhyTracer>();
-//      wifi_phy_tracer->CreateOutput(n_name + "-wifi-phy-drop.csv");
-//      phy->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&WifiPhyTracer::WifiPhyDropCb, wifi_phy_tracer));
-//      m_wifi_phy_tracers.push_back(wifi_phy_tracer);
-    }
-    //=======================
-
-    //Wifi Phy state
-    phy->GetAttribute("State", tmp_ptr_val);
-    Ptr<WifiPhyStateHelper> state_hlp = DynamicCast<WifiPhyStateHelper>(tmp_ptr_val.Get<WifiPhyStateHelper>());
-    if(state_hlp)
-    {
-//      ns3::Ptr<WifiPhyStateTracer> wifi_state_tracer = CreateObject<WifiPhyStateTracer>();
-//      wifi_state_tracer->CreateOutput("wifi-" + n_name + ".csv");
-//      state_hlp->TraceConnectWithoutContext("RxOk", MakeCallback(&WifiPhyStateTracer::RxOkCb, wifi_state_tracer));
-//      state_hlp->TraceConnectWithoutContext("RxError", MakeCallback(&WifiPhyStateTracer::RxErrorCb, wifi_state_tracer));
-//      state_hlp->TraceConnectWithoutContext("Tx", MakeCallback(&WifiPhyStateTracer::TxCb, wifi_state_tracer));
-//      m_wifi_state_tracers.push_back(wifi_state_tracer);
-    }
-    //=======================
 
   }
 

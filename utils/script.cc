@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 const std::string Script::DEFAULT_OUTPUT_DIR = "";
 
@@ -38,9 +39,20 @@ int Script::ChDir(const std::string& dir)
   return chdir(dir.c_str());
 }
 
+extern int errno;
 int Script::MkDir(const std::string& output_dir)
 {
-  return mkdir(output_dir.c_str (), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  errno = 0;
+  int rc = mkdir(output_dir.c_str (), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  if( rc && (errno != EEXIST) )
+  {
+    rc = 1;
+  }
+  else
+  {
+    rc = 0;
+  }
+  return rc;
 }
 
 int Script::CreateOutputDir(const std::string& output_dir)

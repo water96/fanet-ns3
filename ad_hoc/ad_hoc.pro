@@ -3,6 +3,19 @@ CONFIG += console c++11
 CONFIG -= app_bundle
 CONFIG -= qt
 
+message ('$$CONFIG')
+
+CONFIG(release, debug|release){
+    NS3_LIB_POSTFIX = 'optimized'
+} else {
+    NS3_LIB_POSTFIX = 'debug'
+}
+
+#debug:NS3_LIB_POSTFIX = 'debug'
+#release:NS3_LIB_POSTFIX = 'optimized'
+
+message ('Use $$NS3_LIB_POSTFIX configuration')
+
 SOURCES += \
         ../utils/graph.cc \
         adhoc.cc \
@@ -34,24 +47,24 @@ SOURCES += \
 message ($$INCLUDEPATH)
 
 unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ \
-                    -l$$(NS3VER)-core-debug \
-                    -l$$(NS3VER)-network-debug \
-                    -l$$(NS3VER)-internet-debug \
-                    -l$$(NS3VER)-point-to-point-debug \
-                    -l$$(NS3VER)-applications-debug \
-                    -l$$(NS3VER)-stats-debug \
-                    -l$$(NS3VER)-csma-debug \
-                    -l$$(NS3VER)-bridge-debug \
-                    -l$$(NS3VER)-internet-apps-debug \
-                    -l$$(NS3VER)-wifi-debug \
-                    -l$$(NS3VER)-mobility-debug \
-                    -l$$(NS3VER)-netanim-debug \
-                    -l$$(NS3VER)-wave-debug \
-                    -l$$(NS3VER)-aodv-debug \
-                    -l$$(NS3VER)-olsr-debug \
-                    -l$$(NS3VER)-propagation-debug \
-                    -l$$(NS3VER)-traffic-control-debug \
-                    -l$$(NS3VER)-gpsr-debug
+                    -l$$(NS3VER)-core-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-network-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-internet-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-point-to-point-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-applications-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-stats-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-csma-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-bridge-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-internet-apps-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-wifi-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-mobility-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-netanim-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-wave-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-aodv-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-olsr-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-propagation-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-traffic-control-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-gpsr-$$NS3_LIB_POSTFIX
 
 message ($$LIBS)
 
