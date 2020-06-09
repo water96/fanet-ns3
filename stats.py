@@ -63,6 +63,14 @@ def write_csv_file(val_vec, file_name):
   v.shape = len(val_vec), -1
   np.savetxt(file_name, v.T, header=hdr_str, comments="", fmt="%f", delimiter=',')
 
+def write_data_csv_file(matrix, file_name):
+  if len(matrix.shape) != 2:
+    print("Bad shape %s!" % (str(matrix.shape)))
+    return 1
+
+  np.savetxt(file_name, matrix, fmt="%f", delimiter=',')
+  return 0
+
 def check_stats(val_vec):
   real_c = val_vec["udp_conn"]
   pot_c = val_vec["data_link_conn"]

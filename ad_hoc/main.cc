@@ -267,7 +267,7 @@ int main(int argc, char **argv)
   std::string mobility = "RWP";
   cmd.AddValue ("mobility",  "Mobility model", mobility);
 
-  std::string routing = "AODV";
+  std::string routing = "OLSR";
   cmd.AddValue ("routing", "Routing protocol", routing);
 
   std::string traffic = "L3ND;UDP_CBR";

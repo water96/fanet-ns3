@@ -419,8 +419,7 @@ private:
   ns3::Ipv4InterfaceContainer m_ifs;
   ns3::Time m_interval;
   ns3::EventId m_dump_event;
-  uint32_t m_network_connect_cnter;
-  uint32_t m_total_time;
+  std::map<ns3::Ipv4Address, std::string> m_addr_name_map;
 public:
   struct RoutingEntry
   {
@@ -439,7 +438,7 @@ public:
     return tid;
   }
 
-  NetworkAdjTracer() : m_interval(ns3::Seconds(1.0)), m_network_connect_cnter(0), m_total_time(0)
+  NetworkAdjTracer() : m_interval(ns3::Seconds(1.0))
   {
     std::string ss;
     m_cb_name_to_hdr_map.insert(std::make_pair("node-deg", ss));
@@ -455,11 +454,11 @@ public:
       NS_ASSERT(it->first->GetRoutingProtocol() != nullptr);
 
       std::string node_id = ns3::Names::FindName(it->first->GetNetDevice(it->second)->GetNode());
-      hdr += m_delimeter + "deg_" + node_id;
+      m_addr_name_map.insert(std::make_pair(it->first->GetAddress(it->second, 0).GetLocal(), node_id));
+      hdr += m_delimeter + "adj_" + node_id;
     }
-    hdr += m_delimeter + "c";   //current connectivity
 
-    m_cb_out_map.at("node-deg") << hdr << std::endl;
+    m_cb_out_map.at("node-adj") << hdr << std::endl;
   }
 
   void SetDumpInterval(double s)
@@ -510,7 +509,7 @@ public:
       RoutingEntry re;
       re.dest.Set(utils::TrimString(colums[0]).c_str());
       re.gateway.Set(utils::TrimString(colums[1]).c_str());
-      re.ifs.Set(utils::TrimString(colums[2]).c_str());
+//      re.ifs.Set(utils::TrimString(colums[2]).c_str());
       re.records.insert(re.records.begin(), colums.begin(), colums.end());
 
       ret.push_back(std::move(re));
@@ -521,9 +520,7 @@ public:
 
   void DumperCb()
   {
-    std::ofstream& ofs = m_cb_out_map.at("node-deg");
-    m_total_time++;
-    Graph<ns3::Ipv4Address> g;
+    std::ofstream& ofs = m_cb_out_map.at("node-adj");
 
     ofs << ns3::Simulator::Now ().GetSeconds();
 
@@ -540,28 +537,19 @@ public:
       ns3::Ipv4InterfaceAddress local = it->first->GetAddress(it->second, 0);
       for(auto& it : routs)
       {
-        NS_ASSERT(it.ifs == local.GetLocal());
+        //NS_ASSERT(it.ifs == local.GetLocal());
         if(it.dest != local.GetBroadcast())
         {
-          g.AddNodeAndItsLinks(it.ifs, it.gateway);
+//          it.
         }
       }
-      ofs << m_delimeter << g.GetNodeDegree(local.GetLocal());
     }
-    if(g.IsConnected())
-    {
-      m_network_connect_cnter++;
-    }
-    double c = (double)m_network_connect_cnter / (double)m_total_time;
-    ofs << m_delimeter << c << std::endl;
 
     ns3::Simulator::Schedule(m_interval, &NetworkAdjTracer::DumperCb, this);
   }
 
   virtual const ExpResults& _dump_results()
   {
-    double c = (double)m_network_connect_cnter / (double)m_total_time;
-    m_res.insert(std::make_pair("real_net_conn", std::to_string(c)));
     _insert_results_of_subtraces(m_res);
     return m_res;
   }

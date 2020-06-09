@@ -73,6 +73,7 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
   else if(m_protocol == "OLSR")
   {
     routing = new OlsrHelper;
+    attr_val_list.push_back(std::make_pair("HelloInterval", new TimeValue(Seconds (1.0))));
   }
   else if(m_protocol == "GPSR")
   {
@@ -188,10 +189,10 @@ RoutingHelper::ConfigureTracing()
     m_ip_lev_tracer.AddCollectingStatsFrom(ip, n_name);
   }
 
-  m_net_adj_tracer = CreateObject<NetworkAdjTracer>();
-  m_net_adj_tracer->CreateOutput("network-real.csv");
-  m_net_adj_tracer->SetNodeIfces(m_ifs);
-  m_net_adj_tracer->SetDumpInterval(1.0);
+//  m_net_adj_tracer = CreateObject<NetworkAdjTracer>();
+//  m_net_adj_tracer->CreateOutput("network-real.csv");
+//  m_net_adj_tracer->SetNodeIfces(m_ifs);
+//  m_net_adj_tracer->SetDumpInterval(1.0);
 }
 
 

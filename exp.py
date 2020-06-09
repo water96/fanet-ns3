@@ -90,6 +90,11 @@ def run_all(param_tuple, out_dir, log=""):
 
   args = create_arg_list(list(param_tuple), out_dir)
 
+  total = 1
+  for a in param_tuple:
+    total = total * len(a)
+
+  print("Total simulations will be peformed: %d..." % total)
   print("Run simulation!\nCommand: %s" % " ".join(args))
   t1 = time.time()
   print("Start at %s" % time.ctime(t1))
