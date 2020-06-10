@@ -78,25 +78,7 @@ def check_stats(val_vec):
   print(b)
   return int(not b.all())
 
-###################################################################33
-
-def run_calc(dest_dir, target=DEFAULT_TARGET, output=DEFAULT_OUTPUT):
-  if not os.path.isdir(dest_dir):
-    print("Error! Target directory '%s' doesn't exist!" % dest_dir)
-    return 1
-
-  print("Go to target directory %s..." % dest_dir)
-  print("Search experimentation directory by mask '%s'..." % SEED_DIRECTORY_MASK)
-  init_dir = os.getcwd()
-  os.chdir(dest_dir)
-  seed_dirs = [d for d in glob.glob(SEED_DIRECTORY_MASK) if os.path.isdir(d)]
-  if not seed_dirs:
-    print("Error! Target directory '%s' doesn't contain seed directories!" % dest_dir)
-    os.chdir(init_dir)
-    return 1
-
-
-  print("Found %d dirs!" % len(seed_dirs))
+def get_scalar_vector_map(seed_dirs, target):
   val_vec = {}
   for d in seed_dirs:
     print("Process dir %s..." % d)
@@ -116,7 +98,30 @@ def run_calc(dest_dir, target=DEFAULT_TARGET, output=DEFAULT_OUTPUT):
 
     print("Done with csv file %s...%s" % (t, STRING_DELIM))
 
+  return val_vec
+
+###################################################################33
+
+def run_calc(dest_dir, target=DEFAULT_TARGET, output=DEFAULT_OUTPUT):
+  if not os.path.isdir(dest_dir):
+    print("Error! Target directory '%s' doesn't exist!" % dest_dir)
+    return 1
+
+  print("Go to target directory %s..." % dest_dir)
+  print("Search experimentation directory by mask '%s'..." % SEED_DIRECTORY_MASK)
+  init_dir = os.getcwd()
+  os.chdir(dest_dir)
+  seed_dirs = [d for d in glob.glob(SEED_DIRECTORY_MASK) if os.path.isdir(d)]
+  if not seed_dirs:
+    print("Error! Target directory '%s' doesn't contain seed directories!" % dest_dir)
+    os.chdir(init_dir)
+    return 1
+
+
+  print("Found %d dirs!" % len(seed_dirs))
+  val_vec = get_scalar_vector_map(seed_dirs, target)
   print("Done with csv files reading! Totally We have %d headers! Calculate mean and std statistical params..." % len(val_vec))
+  
   mean_vec = calc_mean(val_vec)
   std_vec = calc_std(val_vec)
   mean_file_name = "mean-" + output
@@ -130,6 +135,10 @@ def run_calc(dest_dir, target=DEFAULT_TARGET, output=DEFAULT_OUTPUT):
   rc = check_stats(val_vec)
   if rc:
     print("Warning! Real connectivity is more than potentail in %s!" % (dest_dir))
+
+  test_arr = val_vec['data_link_conn']
+
+
 
   os.chdir(init_dir)
   return 0

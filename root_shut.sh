@@ -1,6 +1,6 @@
 #!/bin/bash
 start="$(date)"
-while ps -p 18945;
+while ps -p 1515;
 do 
 	sleep 30
 done

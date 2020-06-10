@@ -208,7 +208,39 @@ def get_NV_matrix(exp_res_map, scalars_names):
 
 ##    Commands
 def scan_experiments(dest_dir, target=DEFAULT_TARGET):
+  print("Scan experiments directory command start!")
 
+  if not os.path.isdir(dest_dir):
+    print("Check direcotry %s... Error: direcotry doesn't exist" % dest_dir)
+    return 1
+
+  print("Get full experiments list...")
+  all_exps = get_all_valid_dirs(dest_dir)
+  if len(all_exps) == 0:
+    print("Error! Direcotry %s doesn't contain any experiments..." % dest_dir)
+    return 1
+
+  scalars_list = get_all_scalars(dest_dir, all_exps, target)
+
+  print("Read scalar file %s in each directory..." % target)
+  exp_scalar_map = get_scalars_map(dest_dir, all_exps, target)
+
+  print("Scan avaiable parameters...")
+  m = get_mobs_vector(all_exps)
+  r = get_routing_vector(all_exps)
+  n = get_node_vector(all_exps)
+  v = get_velocity_vector(all_exps)
+
+  print("%s\n\t---> Report <----" % STRING_DELIM)
+  print("Total valid experiments: %d" % len(all_exps))
+  print("Avaiable sclars: %s" % str(scalars_list))
+  print("Avaiable parameters:")
+  print("\tMobility: %s" % (str(m.keys())))
+  print("\tRouting: %s" % (str(r.keys())))
+  print("\tNodes: %s" % (str(n.keys())))
+  print("\tVelocities: %s" % (str(v.keys())))
+
+  print("\n\t---> End <----%s" % STRING_DELIM)
   return 1
 
 def create_NV_matrix(dest_dir, mobility, routing, scalars_list, target=DEFAULT_TARGET, output=DEFAULT_OUTPUT):

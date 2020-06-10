@@ -1,24 +1,27 @@
-function [ y ] = plot_connectivity( n_key, v_key, nvm )
+function [ r ] = plot_connectivity( x, y, m, desc )
 %UNTITLED3 Summary of this function goes here
 %   Detailed explanation goes here
 
-    Nn = size(n_key, 1);
-    Nv = size(v_key, 1);
-    Snvm = size(nvm);
+    xn = size(x, 1);
+    yn = size(y, 1);
+    Sm = size(m);
     
-    if Snvm(1) ~= Nn || Snvm(2) ~= Nv
+    if Sm(2) ~= xn || Sm(1) ~= yn
         return;
     end
     
-    figure
     hold on
-    for i = 1:Nv
-        plot(n_key, nvm(:, i))
-        legend(strcat('v=', num2str(v_key(i))))
+    for i = 1:yn
+        plot(x, m(i, :), 'DisplayName', strcat(desc, num2str(y(i))),...
+                               'LineStyle', ':',...
+                               'LineWidth', 1.,...
+                               'Marker', 'o',...
+                               'MarkerSize', 8)
     end
+    legend('show')
     grid on
     hold off
-    y = zeros(Snvm);
+    r = zeros(Sm);
     
 end
 
