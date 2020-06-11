@@ -16,7 +16,7 @@ MODEL_EXEC = "/home/aleksey/work/first_ns3/build-ad_hoc-Desktop_Qt_5_12_6_GCC_64
 
 NODES_STRING_DEFAULT = "2..2..20"
 SPEEDS_STRING_DEFAULT = "100..20..200"
-SEEDS_STRING_DEFAULT = "0..1..9"
+RUNS_STRING_DEFAULT = "1..1..10"
 
 MOB_STRING_DEFAULT = "GM,CONST,RWP"
 ROUTING_STRING_DEFAULT = "AODV"
@@ -48,23 +48,23 @@ def parse_cmd_args(argv):
                   metavar="",
                   help="Log file name")
 
-  parser.add_option("-n", "--nodes", action="store", type="string", dest="nodes", default=NODES_STRING_DEFAULT,
+  parser.add_option("-N", "--nodes", action="store", type="string", dest="nodes", default=NODES_STRING_DEFAULT,
                   metavar=NODES_STRING_DEFAULT,
                   help="Number of nodes")
 
-  parser.add_option("-s", "--seeds", action="store", type="string", dest="seeds", default=SEEDS_STRING_DEFAULT,
-                  metavar=SEEDS_STRING_DEFAULT,
-                  help="Number of seeds")
+  parser.add_option("-r", "--runs", action="store", type="string", dest="runs", default=RUNS_STRING_DEFAULT,
+                  metavar=RUNS_STRING_DEFAULT,
+                  help="Run indexes")
 
-  parser.add_option("-v", "--speeds", action="store", type="string", dest="speeds", default=SPEEDS_STRING_DEFAULT,
+  parser.add_option("-V", "--speeds", action="store", type="string", dest="speeds", default=SPEEDS_STRING_DEFAULT,
                   metavar=SPEEDS_STRING_DEFAULT,
                   help="Number of speeds")
 
-  parser.add_option("-m", "--mobility", action="store", type="string", dest="mobility", default=MOB_STRING_DEFAULT,
+  parser.add_option("-M", "--mobility", action="store", type="string", dest="mobility", default=MOB_STRING_DEFAULT,
                   metavar=MOB_STRING_DEFAULT,
                   help="Names of mobililty")
 
-  parser.add_option("-r", "--routing", action="store", type="string", dest="routing", default=ROUTING_STRING_DEFAULT,
+  parser.add_option("-R", "--routing", action="store", type="string", dest="routing", default=ROUTING_STRING_DEFAULT,
                   metavar=ROUTING_STRING_DEFAULT,
                   help="Names of routing")
 
@@ -77,7 +77,7 @@ def parse_cmd_args(argv):
 
 def create_arg_list(param_arr, out_dir):
   a = ["parallel"]
-  exec_name = MODEL_EXEC + " --mobility={1} --routing={2} --nodes={3} --speed={4} --seed={5} --out-dir=" + out_dir
+  exec_name = MODEL_EXEC + " --mobility={1} --routing={2} --nodes={3} --speed={4} --run={5} --out-dir=" + out_dir
   a.append(exec_name)
   for p in param_arr:
     a.append(":::")
@@ -123,14 +123,14 @@ if __name__ == '__main__':
       print('Done with rc = %d%s' % (1, STRING_DELIM))
       sys.exit(1)
 
-    (opt.mobility, opt.routing, opt.nodes, opt.speeds, opt.seeds) = t
+    (opt.mobility, opt.routing, opt.nodes, opt.speeds, opt.runs) = t
 
   m = create_sym_arr(opt.mobility)
   r = create_sym_arr(opt.routing)
 
   n = create_range_arr(opt.nodes)
   v = create_range_arr(opt.speeds, type=float)
-  s = create_range_arr(opt.seeds)
+  s = create_range_arr(opt.runs)
 
   print('Pararms parsing done!')
   t = (m, r, n, v, s)

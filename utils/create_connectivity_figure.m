@@ -18,7 +18,7 @@ hold(subplot1,'on');
 plot1 = plot(X1,YMatrix1,'Parent',subplot1,'MarkerSize',8,'Marker','o',...
     'LineWidth',1,...
     'LineStyle',':');
-
+ylim([0, 1.0]);
 for i = 1:length(X2)
     set(plot1(i),'DisplayName', strcat(text, num2str(X2(i))));
 end
@@ -35,7 +35,7 @@ hold(subplot2,'on');
 plot2 = plot(X1,YMatrix2,'Parent',subplot2,'MarkerSize',8,'Marker','o',...
     'LineWidth',1,...
     'LineStyle',':');
-
+ylim([0, 1.0]);
 for i = 1:length(X2)
     set(plot2(i),'DisplayName', strcat(text, num2str(X2(i))));
 end
@@ -52,7 +52,7 @@ hold(subplot3,'on');
 plot3 = plot(X1,YMatrix3,'Parent',subplot3,'MarkerSize',8,'Marker','o',...
     'LineWidth',1,...
     'LineStyle',':');
-
+ylim([0, 1.0]);
 for i = 1:length(X2)
     set(plot3(i),'DisplayName', strcat(text, num2str(X2(i))));
 end

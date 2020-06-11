@@ -12,7 +12,6 @@ FanetMobilityCreator& FanetMobilityCreator::Inst()
 
 FanetMobilityCreator::FanetMobilityCreator() : m_inst(nullptr)
 {
-  //TODO: add constant mobility
   m_models.insert(std::make_pair("RWP", new RWPFANETMobility));
   m_models.insert(std::make_pair("CONST", new CONSTFANETMobility));
   m_models.insert(std::make_pair("GM", new GMFANETMobility));
@@ -83,11 +82,6 @@ void FanetMobilityCreator::DestroyMobilityModel()
 FanetMobility::FanetMobility()
 {
 
-}
-
-void FanetMobility::SetStreamIndex(uint32_t index)
-{
-  m_sindex = index;
 }
 
 FanetMobility::~FanetMobility(){}
@@ -164,9 +158,10 @@ FanetMobility* RWPFANETMobility::Clone() const
   return new RWPFANETMobility();
 }
 
-void RWPFANETMobility::Install(const ns3::NodeContainer& c)
+uint32_t RWPFANETMobility::Install(const ns3::NodeContainer& c, uint32_t stream_index)
 {
   m_nodes = c;
+  m_sindex = stream_index;
 
   MobilityHelper mobilityAdhoc;
 
@@ -202,6 +197,8 @@ void RWPFANETMobility::Install(const ns3::NodeContainer& c)
       node_mob->SetPosition(initial_pos->GetNext());
     }
   }
+
+  return m_sindex;
 }
 
 //=====================================//
@@ -218,9 +215,10 @@ FanetMobility* GMFANETMobility::Clone() const
 }
 
 
-void GMFANETMobility::Install(const ns3::NodeContainer& c)
+uint32_t GMFANETMobility::Install(const ns3::NodeContainer& c, uint32_t stream_index)
 {
   m_nodes = c;
+  m_sindex = stream_index;
 
   MobilityHelper mobilityAdhoc;
 
@@ -259,6 +257,8 @@ void GMFANETMobility::Install(const ns3::NodeContainer& c)
       node_mob->SetPosition(initial_pos->GetNext());
     }
   }
+
+  return m_sindex;
 }
 
 //=====================================//
@@ -297,9 +297,10 @@ ns3::Ptr<ns3::PositionAllocator> CONSTFANETMobility::CreateInitialPositionAlloca
   return ns3::DynamicCast<PositionAllocator>(initial_alloc);
 }
 
-void CONSTFANETMobility::Install(const ns3::NodeContainer& c)
+uint32_t CONSTFANETMobility::Install(const ns3::NodeContainer& c, uint32_t stream_index)
 {
   m_nodes = c;
+  m_sindex = stream_index;
 
   MobilityHelper mobilityAdhoc;
 
@@ -319,4 +320,6 @@ void CONSTFANETMobility::Install(const ns3::NodeContainer& c)
       node_mob->SetPosition(initial_pos->GetNext());
     }
   }
+
+  return m_sindex;
 }

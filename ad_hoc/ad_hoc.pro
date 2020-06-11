@@ -67,7 +67,9 @@ unix:!macx: LIBS += -L$$(NS3DIR)/build/lib/ \
                     -l$$(NS3VER)-olsr-$$NS3_LIB_POSTFIX \
                     -l$$(NS3VER)-propagation-$$NS3_LIB_POSTFIX \
                     -l$$(NS3VER)-traffic-control-$$NS3_LIB_POSTFIX \
-                    -l$$(NS3VER)-gpsr-$$NS3_LIB_POSTFIX
+                    -l$$(NS3VER)-gpsr-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-pagpsr-$$NS3_LIB_POSTFIX \
+                    -l$$(NS3VER)-mmgpsr-$$NS3_LIB_POSTFIX
 
 message ($$LIBS)
 

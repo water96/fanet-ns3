@@ -12,7 +12,7 @@ import numpy as np
 
 STRING_DELIM = "\n=====================================\n"
 
-SEED_DIRECTORY_MASK = "seed-*"
+SEED_DIRECTORY_MASK = "run-*"
 DEFAULT_OUTPUT = "results.csv"
 DEFAULT_TARGET = "scalars-impl.csv"
 

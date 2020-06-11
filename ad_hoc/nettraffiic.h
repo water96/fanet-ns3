@@ -17,11 +17,10 @@ class NetTraffic : public ns3::Object
 {
 protected:
   virtual NetTraffic* Clone() const = 0;
-private:
-  uint64_t m_index;
-  double m_total_time;
-
+    uint64_t m_sindex;
+    double m_total_time;
 public:
+
   static ns3::TypeId GetTypeId (void)
   {
     static ns3::TypeId tid = ns3::TypeId ("NetTraffic")
@@ -34,14 +33,12 @@ public:
   NetTraffic& operator=(const NetTraffic&) = delete;
   NetTraffic(const NetTraffic&) = delete;
 
-  virtual void SetStreamIndex(uint32_t index);
   virtual void SetSimulationTime(double t);
   virtual uint64_t GetStreamIndex() const;
   virtual double GetTotalSimTime() const;
-  virtual int Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c) = 0;
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) = 0;
   virtual int ConfigreTracing() = 0;
 
-  friend class NetTrafficCreator;
 };
 
 class PingTraffic : public NetTraffic
@@ -60,7 +57,7 @@ public:
 
   PingTraffic();
   virtual ~PingTraffic();
-  virtual int Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c) override;
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) override;
   virtual int ConfigreTracing() override;
 };
 
@@ -86,7 +83,7 @@ public:
   }
   UdpCbrTraffic();
   virtual ~UdpCbrTraffic();
-  virtual int Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c) override;
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) override;
   virtual int ConfigreTracing() override;
   //to callbacks
   void RxCb(ns3::Ptr<ns3::Socket> socket);
@@ -116,7 +113,7 @@ public:
 
   L3NodesDiscoverTraffic();
   virtual ~L3NodesDiscoverTraffic();
-  virtual int Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c) override;
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) override;
   virtual int ConfigreTracing() override;
 
 

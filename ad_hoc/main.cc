@@ -242,6 +242,15 @@ public:
   }
 };
 
+std::ostream& operator << (std::ostream& os, const ExpResults& res)
+{
+  for(const auto& p : res)
+  {
+    os << p.first << "=" << p.second << std::endl;
+  }
+  return os;
+}
+
 std::vector<uint32_t> CreateSeedsNum(uint32_t num_seeds)
 {
   std::vector<uint32_t> ret;
@@ -261,13 +270,13 @@ int main(int argc, char **argv)
   CommandLine cmd;
   cmd.Usage ("FANET simulation program.\n");
 
-  uint32_t num_nodes = 2;
+  uint32_t num_nodes = 8;
   cmd.AddValue ("nodes",  "Number of nodes", num_nodes);
 
-  std::string mobility = "RWP";
+  std::string mobility = "GM";
   cmd.AddValue ("mobility",  "Mobility model", mobility);
 
-  std::string routing = "OLSR";
+  std::string routing = "PAGPSR";
   cmd.AddValue ("routing", "Routing protocol", routing);
 
   std::string traffic = "L3ND;UDP_CBR";
@@ -279,8 +288,11 @@ int main(int argc, char **argv)
   double speed = 200.0;
   cmd.AddValue ("speed", "Average speed of nodes", speed);
 
-  uint32_t seed_num = 1;
+  uint32_t seed_num = RngSeedManager::GetSeed();
   cmd.AddValue ("seed", "Seed number", seed_num);
+
+  int run_index = RngSeedManager::GetRun();
+  cmd.AddValue ("run", "Run index number (create another independent stream)", run_index);
 
   int num_of_tests = -1;
   cmd.AddValue ("tests", "Number of tests (seed arg will be ignored)", num_of_tests);
@@ -293,15 +305,15 @@ int main(int argc, char **argv)
 
   cmd.Parse (argc, argv);
 
-  std::vector<uint32_t> seeds;
+  std::vector<uint32_t> run_number_vector;
 
   if(num_of_tests != -1)
   {
-    seeds = CreateSeedsNum(num_of_tests);
+    run_number_vector = CreateSeedsNum(num_of_tests);
   }
   else
   {
-    seeds.push_back(seed_num);
+    run_number_vector.push_back(run_index);
   }
 
   //Go to output dir
@@ -327,15 +339,16 @@ int main(int argc, char **argv)
   ScalarsStatisticTracer statistics;
   if(calc_stats)
   {
-    statistics.CreateOutput("scalars.csv");
-    statistics.Reserv(seed_num);
+    statistics.CreateOutput("stats.csv");
+    statistics.Reserv(num_of_tests);
   }
-  for(auto s : seeds)
+  for(auto r : run_number_vector)
   {
-    std::cout << "\tSeed: " << s << std::endl;
-    std::string seed_dir = out_dir + "/seed-" + std::to_string(s);
-    Script::MkDir(seed_dir);
-    Script::ChDir(seed_dir);
+    std::cout << "\tRun index: " << r << std::endl;
+    RngSeedManager::SetRun(r);
+    std::string run_dir = out_dir + "/run-" + std::to_string(r);
+    Script::MkDir(run_dir);
+    Script::ChDir(run_dir);
 
     ScalarsTracer scalar_of_one_impl;
     scalar_of_one_impl.CreateOutput("impl.csv");
@@ -343,7 +356,6 @@ int main(int argc, char **argv)
     Ptr<FanetRoutingExperiment> exp = CreateObject<FanetRoutingExperiment>();
 
     exp->SetAttribute("nodes", UintegerValue(num_nodes));
-    exp->SetAttribute("stream", UintegerValue(s));
     exp->SetAttribute("time", DoubleValue(total_time));
     exp->SetAttribute("mobility", StringValue(mobility));
     exp->SetAttribute("traffic", StringValue(traffic));
@@ -351,14 +363,17 @@ int main(int argc, char **argv)
     exp->SetAttribute("speed", DoubleValue(speed));
     exp->Simulate(argc, argv);
 
-    const ExpResults& r = exp->GetSimulationResults();
+    const ExpResults& results = exp->GetSimulationResults();
 
-    scalar_of_one_impl.Dump(r);
+    scalar_of_one_impl.Dump(results);
 
     if(calc_stats)
     {
-      statistics.Add(r);
+      statistics.Add(results);
     }
+
+    std::cout << "Experiments results:" << std::endl;
+    std::cout << results;
   }
 
   if(calc_stats)

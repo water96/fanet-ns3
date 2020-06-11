@@ -7,6 +7,8 @@
 #include "ns3/dsr-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/gpsr-module.h"
+#include "ns3/pagpsr-helper.h"
+#include "ns3/mmgpsr-helper.h"
 
 using namespace ns3;
 
@@ -78,6 +80,17 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
   else if(m_protocol == "GPSR")
   {
     routing = new GpsrHelper;
+    attr_val_list.push_back(std::make_pair("HelloInterval", new TimeValue(Seconds (1.0))));
+  }
+  else if(m_protocol == "PAGPSR")
+  {
+    routing = new PAGpsrHelper;
+    attr_val_list.push_back(std::make_pair("HelloInterval", new TimeValue(Seconds (1.0))));
+  }
+  else if(m_protocol == "MMGPSR")
+  {
+    routing = new MMGpsrHelper;
+    attr_val_list.push_back(std::make_pair("HelloInterval", new TimeValue(Seconds (1.0))));
   }
   else
   {
@@ -96,7 +109,6 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
   for(auto it = c.Begin(); it != c.End(); it++)
   {
     Ptr<Ipv4RoutingProtocol> routing = (*it)->GetObject<Ipv4RoutingProtocol>();
-    Ptr<aodv::RoutingProtocol> r = DynamicCast<aodv::RoutingProtocol>(routing);
     if(routing)
     {
       for(auto vars : attr_val_list)

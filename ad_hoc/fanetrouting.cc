@@ -53,10 +53,6 @@ TypeId FanetRoutingExperiment::GetTypeId (void)
                    UintegerValue (2),
                    MakeUintegerAccessor (&FanetRoutingExperiment::m_nNodes),
                    MakeUintegerChecker<uint32_t> (2, 100))
-    .AddAttribute ("stream", "Seed of random number generation",
-                   UintegerValue (0),
-                   MakeUintegerAccessor (&FanetRoutingExperiment::m_streamIndex),
-                   MakeUintegerChecker<uint32_t> ())
     .AddAttribute ("time", "Total simulation time",
                    DoubleValue (),
                    MakeDoubleAccessor (&FanetRoutingExperiment::m_total_sim_time),
@@ -215,10 +211,9 @@ void FanetRoutingExperiment::ConfigureMobility ()
   FanetMobilityCreator::Inst().CreateMobilityModel(m_mob_scenario);
   FanetMobility& mob = FanetMobilityCreator::Inst().GetMobilityModel();
 
-  mob.SetStreamIndex(m_streamIndex);
   mob.SetSimulationTime(ns3::Seconds(m_total_sim_time));
   mob.SetMobilityAreaAndSpeed(ns3::Vector3D(20000.0, 20000.0, 2000.0), m_nodeSpeed);
-  mob.Install(m_adhocTxNodes);
+  m_streamIndex += mob.Install(m_adhocTxNodes, m_streamIndex);
 }
 
 void FanetRoutingExperiment::ConfigureApplications ()
@@ -244,9 +239,9 @@ void FanetRoutingExperiment::ConfigureApplications ()
   {
     ObjectFactory f(it);
     ns3::Ptr<NetTraffic> tr = f.Create<NetTraffic>();
-    tr->SetStreamIndex(m_streamIndex);
+
     tr->SetSimulationTime(m_total_sim_time);
-    tr->Install(m_adhocTxNodes, m_adhocTxDevices, m_adhocTxInterfaces);
+    m_streamIndex += tr->Install(m_adhocTxNodes, m_adhocTxDevices, m_adhocTxInterfaces, m_streamIndex);
     m_traffic_generators.push_back(tr);
   }
 }

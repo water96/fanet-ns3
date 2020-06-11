@@ -54,11 +54,11 @@ public:
 
   FanetMobility();
   virtual ~FanetMobility();
-  virtual void SetStreamIndex(uint32_t index);
   virtual void SetSimulationTime(const ns3::Time& t);
   virtual void SetMobilityAreaAndSpeed(const ns3::Vector3D& vec, double speed);
-  virtual void Install(const ns3::NodeContainer& c) = 0;
+  virtual uint32_t Install(const ns3::NodeContainer& c, uint32_t stream_index) = 0;
   virtual void ConfigureMobilityTracing();
+
 
   friend class FanetMobilityCreator;
 };
@@ -73,7 +73,7 @@ private:
 public:
   RWPFANETMobility() = default;
   virtual ~RWPFANETMobility();
-  void Install(const ns3::NodeContainer& c) override;
+   uint32_t Install(const ns3::NodeContainer& c, uint32_t stream_index) override;
 };
 
 //=====================================//
@@ -86,7 +86,7 @@ private:
 public:
   GMFANETMobility() = default;
   virtual ~GMFANETMobility();
-  void Install(const ns3::NodeContainer& c) override;
+  uint32_t Install(const ns3::NodeContainer& c, uint32_t stream_index) override;
 };
 
 //=====================================//
@@ -100,7 +100,7 @@ private:
 public:
   CONSTFANETMobility() = default;
   virtual ~CONSTFANETMobility();
-  void Install(const ns3::NodeContainer& c) override;
+  uint32_t Install(const ns3::NodeContainer& c, uint32_t stream_index) override;
 };
 
 
