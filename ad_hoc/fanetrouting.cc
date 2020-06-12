@@ -230,7 +230,7 @@ void FanetRoutingExperiment::ConfigureApplications ()
   std::vector<std::string> traffic_apps_id;
   utils::SplitString(m_traffic_model, ";", traffic_apps_id);
 
-  if(traffic_apps_id.empty())
+  if((m_traffic_model != "") && traffic_apps_id.empty())
   {
     traffic_apps_id.push_back(m_traffic_model);
   }

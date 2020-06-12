@@ -122,4 +122,24 @@ public:
   void TransmitCb(ns3::Ptr<ns3::NetDevice> dev, ns3::Ptr<ns3::TrafficControlLayer> tc, ns3::Ipv4InterfaceAddress ip_addr);
 };
 
+class UdpClientServerTraffic : public NetTraffic
+{
+private:
+  uint16_t m_pckt_size;
+  double m_interval;
+
+  virtual NetTraffic* Clone() const override;
+public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("UDPClientServer")
+      .SetParent<NetTraffic> ()
+      .AddConstructor<UdpClientServerTraffic> ();
+    return tid;
+  }
+  UdpClientServerTraffic();
+  virtual ~UdpClientServerTraffic();
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) override;
+  virtual int ConfigreTracing() override;
+};
 #endif // NETTRAFFIIC_H

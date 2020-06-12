@@ -23,6 +23,7 @@ using namespace ns3;
 NS_OBJECT_ENSURE_REGISTERED (UdpCbrTraffic);
 NS_OBJECT_ENSURE_REGISTERED (PingTraffic);
 NS_OBJECT_ENSURE_REGISTERED (L3NodesDiscoverTraffic);
+NS_OBJECT_ENSURE_REGISTERED (UdpClientServerTraffic);
 
 //==================================================
 
@@ -280,3 +281,69 @@ int L3NodesDiscoverTraffic::ConfigreTracing()
   m_adj_tracer->SetDumpInterval(1.0);
   return 0;
 }
+
+//===================================
+
+UdpClientServerTraffic::UdpClientServerTraffic() : m_interval(1.0), m_pckt_size(64)
+{
+
+}
+UdpClientServerTraffic::~UdpClientServerTraffic()
+{
+
+}
+
+NetTraffic* UdpClientServerTraffic::Clone() const
+{
+  return new UdpClientServerTraffic();
+}
+
+uint32_t UdpClientServerTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index)
+{
+  if(nc.GetN() != ip_c.GetN())
+  {
+    return -1;
+  }
+
+  m_sindex = stream_index;
+
+  Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
+  var->SetStream(m_sindex);
+
+  uint16_t port = 109;  // well-known echo port number
+  Ptr<Node> src_node = nc.Get (0);
+  std::string src_name_node = Names::FindName(src_node);
+  Ipv4Address src_addr = ip_c.GetAddress(0);
+
+  NodeContainer src_node_c(src_node);
+  NodeContainer dst_node_c;
+
+  for (auto ipf = ip_c.Begin() + 1; ipf != ip_c.End(); ipf++)
+  {
+    ApplicationContainer apps;
+    uint32_t iid = (*ipf).second;
+    Ptr<Node> dst_node = (*ipf).first->GetNetDevice(iid)->GetNode();
+    dst_node_c.Add(dst_node);
+    std::string dst_name_node = Names::FindName(dst_node);
+    Ipv4Address dst_addr = (*ipf).first->GetAddress(iid,0).GetLocal();
+
+    //Only one source node
+    UdpClientHelper client(dst_addr, port);
+    client.SetAttribute ("Interval", TimeValue(Seconds(m_interval)));
+    client.SetAttribute ("PacketSize", UintegerValue (m_pckt_size));
+    apps = client.Install(src_node_c);
+    apps.Start(Seconds (var->GetValue(0.05, 0.4)));
+  }
+
+  UdpServerHelper server (port);
+  ApplicationContainer apps = server.Install (dst_node_c);
+  apps.Start (Seconds (0.0));
+
+  return (m_sindex += ip_c.GetN());
+}
+
+int UdpClientServerTraffic::ConfigreTracing()
+{
+  return 0;
+}
+

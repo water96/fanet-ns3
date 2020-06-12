@@ -28,6 +28,11 @@
 #include "ns3/wifi-module.h"
 #include "ns3/ip-l4-protocol.h"
 
+#include "ns3/flow-monitor.h"
+#include "ns3/flow-monitor-helper.h"
+#include "ns3/flow-classifier.h"
+#include "ns3/ipv4-flow-classifier.h"
+
 #include "utils/graph.h"
 #include "utils/script.h"
 
@@ -305,6 +310,64 @@ public:
   {
     double c = (double)m_link_connect_cnter / (double)m_total_time;
     m_res.insert(std::make_pair("data_link_conn", std::to_string(c)));
+    _insert_results_of_subtraces(m_res);
+    return m_res;
+  }
+};
+
+class FlowMonTracer : public TracerBase
+{
+private:
+  ns3::Time m_interval;
+  ns3::EventId m_dump_event;
+  uint32_t m_total_time;
+
+  ns3::Ptr<ns3::FlowMonitor> m_flowmon;
+  ns3::Ptr<ns3::Ipv4FlowClassifier> m_classifier;
+
+public:
+  static ns3::TypeId GetTypeId (void)
+  {
+    static ns3::TypeId tid = ns3::TypeId ("FlowMonTracer")
+      .SetParent<TracerBase> ()
+      .AddConstructor<FlowMonTracer> ();
+    return tid;
+  }
+
+  FlowMonTracer() : m_interval(ns3::Seconds(1.0)), m_total_time(0)
+  {
+    std::string ss;
+    m_cb_name_to_hdr_map.insert(std::make_pair("flow-mon", ss));
+  }
+
+  void SetNodes(ns3::NodeContainer& c)
+  {
+    ns3::FlowMonitorHelper flowmon_hlp;
+    m_flowmon = flowmon_hlp.Install(c);
+
+    m_classifier = ns3::DynamicCast<ns3::Ipv4FlowClassifier>(flowmon_hlp.GetClassifier());
+  }
+
+  void SetDumpInterval(double s)
+  {
+    m_interval = ns3::Seconds(s);
+    m_dump_event.Cancel();
+    m_dump_event = ns3::Simulator::Schedule(m_interval, &FlowMonTracer::DumperCb, this);
+  }
+
+  void DumperCb()
+  {
+    m_flowmon->CheckForLostPackets();
+
+    std::map<ns3::FlowId, ns3::FlowMonitor::FlowStats> stats = m_flowmon->GetFlowStats();
+
+
+
+    ns3::Simulator::Schedule(m_interval, &FlowMonTracer::DumperCb, this);
+  }
+
+  virtual const ExpResults& _dump_results()
+  {
     _insert_results_of_subtraces(m_res);
     return m_res;
   }

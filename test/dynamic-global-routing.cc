@@ -1,226 +1,493 @@
 /* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- * Contributed by:  Luis Cortes (cortes@gatech.edu)
- */
 
-
-// This script exercises global routing code in a mixed point-to-point
-// and csma/cd environment.  We bring up and down interfaces and observe
-// the effect on global routing.  We explicitly enable the attribute
-// to respond to interface events, so that routes are recomputed
-// automatically.
-//
-// Network topology
-//
-//  n0
-//     \ p-p
-//      \          (shared csma/cd)
-//       n2 -------------------------n3
-//      /            |        | 
-//     / p-p        n4        n5 ---------- n6
-//   n1                             p-p
-//   |                                      |
-//   ----------------------------------------
-//                p-p
-//
-// - at time 1 CBR/UDP flow from n1 to n6's IP address on the n5/n6 link
-// - at time 10, start similar flow from n1 to n6's address on the n1/n6 link
-//
-//  Order of events
-//  At pre-simulation time, configure global routes.  Shortest path from
-//  n1 to n6 is via the direct point-to-point link
-//  At time 1s, start CBR traffic flow from n1 to n6
-//  At time 2s, set the n1 point-to-point interface to down.  Packets
-//    will be diverted to the n1-n2-n5-n6 path
-//  At time 4s, re-enable the n1/n6 interface to up.  n1-n6 route restored.
-//  At time 6s, set the n6-n1 point-to-point Ipv4 interface to down (note, this
-//    keeps the point-to-point link "up" from n1's perspective).  Traffic will
-//    flow through the path n1-n2-n5-n6
-//  At time 8s, bring the interface back up.  Path n1-n6 is restored
-//  At time 10s, stop the first flow.
-//  At time 11s, start a new flow, but to n6's other IP address (the one
-//    on the n1/n6 p2p link)
-//  At time 12s, bring the n1 interface down between n1 and n6.  Packets
-//    will be diverted to the alternate path
-//  At time 14s, re-enable the n1/n6 interface to up.  This will change 
-//    routing back to n1-n6 since the interface up notification will cause
-//    a new local interface route, at higher priority than global routing
-//  At time 16s, stop the second flow.
-
-// - Tracing of queues and packet receptions to file "dynamic-global-routing.tr"
-
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <cassert>
-
+#include "ns3/gpsr-module.h"
+#include "ns3/pagpsr-module.h"
+#include "ns3/mmgpsr-module.h"
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
-#include "ns3/csma-module.h"
 #include "ns3/internet-module.h"
+#include "ns3/mobility-module.h"
 #include "ns3/point-to-point-module.h"
+#include "ns3/wifi-module.h"
+#include "ns3/v4ping-helper.h"
+#include "ns3/udp-echo-server.h"
+#include "ns3/udp-echo-client.h"
+#include "ns3/udp-echo-helper.h"
+#include <iostream>
+#include <cmath>
+#include "ns3/flow-monitor-module.h"
+#include "ns3/netanim-module.h"
+#include "string.h"
+#include "ns3/ocb-wifi-mac.h"
+#include "ns3/wifi-80211p-helper.h"
+#include "ns3/wave-mac-helper.h"
 #include "ns3/applications-module.h"
-#include "ns3/ipv4-global-routing-helper.h"
+#include <string>
+#include <sys/stat.h>
+#include <iomanip>
+#include <fstream>
+
+#include "ns3/wave-net-device.h"
+#include "ns3/wave-mac-helper.h"
+#include "ns3/wave-helper.h"
+
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE ("DynamicGlobalRoutingExample");
+uint32_t totalHello = 0;
+uint32_t rx_drop = 0;
+uint32_t tx_drop = 0;
 
-int 
-main (int argc, char *argv[])
+static void PRxDrop (Ptr<const Packet> m_phyRxDropTrace, ns3::WifiPhyRxfailureReason){
+
+  //std::cout<<"PhyRXDrop at == " << Simulator::Now ().GetSeconds () << "\n";
+  rx_drop += 1;
+}
+
+static void PTxDrop (Ptr<const Packet> m_phyTxDropTrace){
+
+  //std::cout<<"PhyTXDrop at == " << Simulator::Now ().GetSeconds () << "\n";
+  tx_drop +=1;
+}
+
+
+void handler (int arg0)
 {
-  // The below value configures the default behavior of global routing.
-  // By default, it is disabled.  To respond to interface events, set to true
-  Config::SetDefault ("ns3::Ipv4GlobalRouting::RespondToInterfaceEvents", BooleanValue (true));
+  std::cout << "The simulation is now at: "<<arg0 <<" seconds" << std::endl;
+}
 
-  // Allow the user to override any of the defaults and the above
-  // Bind ()s at run-time, via command-line arguments
+
+class GpsrExample
+{
+public:
+  GpsrExample ();
+  /// Configure script parameters, \return true on successful configuration
+  bool Configure (int argc, char **argv);
+  /// Run simulation
+  void Run ();
+  /// Report results
+  void Report (std::ostream & os);
+
+  void writeToFile(uint32_t lostPackets, uint32_t totalTx, uint32_t totalRx, double hopCount,double count, double delay);
+
+private:
+
+  uint32_t size;
+
+  std::string phyMode;
+  /// Width of the Node Grid
+  uint32_t gridWidth;
+  /// Distance between nodes, meters
+  double step;
+  /// Simulation time, seconds
+  double totalTime;
+  /// Write per-device PCAP traces if true
+  bool pcap;
+  // seed to generate random numbers
+  uint32_t seed;
+  std::string path;
+  Time entrylifetime;
+  uint32_t headersize;
+  uint32_t packetsize;
+  bool newfile;
+  std::string algorithm;
+  int sourcenode;
+  int destinationNode;
+  int speed;
+  uint32_t drift;
+  uint32_t nPairs;
+
+
+  NodeContainer AllNodes;
+  NodeContainer nodes;
+  NetDeviceContainer devices;
+  Ipv4InterfaceContainer interfaces;
+  //\}
+
+private:
+  void CreateNodes ();
+  void CreateDevices ();
+  void InstallInternetStack ();
+  void InstallApplications ();
+
+};
+
+int main (int argc, char **argv)
+{
+  GpsrExample test;
+  if (! test.Configure(argc, argv))
+    NS_FATAL_ERROR ("Configuration failed. Aborted.");
+
+  test.Run ();
+  test.Report (std::cout);
+  return 0;
+}
+
+//-----------------------------------------------------------------------------
+GpsrExample::GpsrExample () :
+  // Number of Nodes
+  size (30),
+  // Grid Width
+  gridWidth(10),
+  // Distance between nodes
+  step (100),
+  // Simulation time
+  totalTime (200),
+  // Generate capture files for each node
+  pcap (false),
+  //seed to generate random numbers
+  seed (1394),
+  path("outputs/"),
+  packetsize(512),
+  algorithm("pagpsr"),
+  newfile(true),
+  speed(15),
+  drift(0),
+  nPairs(15),
+  phyMode ("OfdmRate3MbpsBW10MHz")
+
+{
+}
+
+
+bool
+GpsrExample::Configure (int argc, char **argv)
+{
+
   CommandLine cmd;
+
+  cmd.AddValue ("pcap", "Write PCAP traces.", pcap);
+  cmd.AddValue ("size", "Number of nodes.", size);
+  cmd.AddValue ("time", "Simulation time, s.", totalTime);
+  cmd.AddValue ("step", "Grid step, m", step);
+  cmd.AddValue ("seed", "seed value", seed);
+  cmd.AddValue ("path", "path of results file", path);
+  cmd.AddValue ("conn", "number of conections", nPairs);
+  cmd.AddValue ("algorithm", "routing algorithm", algorithm);
+  cmd.AddValue ("newfile", "create new result file", newfile);
+  cmd.AddValue ("speed", "node speed", speed);
+
+// disable fragmentation for frames below 2200 bytes
+  Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("2200"));
+  // turn off RTS/CTS for frames below 2200 bytes
+  Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("500"));
+  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue (phyMode));
   cmd.Parse (argc, argv);
+  return true;
+}
 
-  NS_LOG_INFO ("Create nodes.");
-  NodeContainer c;
-  c.Create (7);
-  NodeContainer n0n2 = NodeContainer (c.Get (0), c.Get (2));
-  NodeContainer n1n2 = NodeContainer (c.Get (1), c.Get (2));
-  NodeContainer n5n6 = NodeContainer (c.Get (5), c.Get (6));
-  NodeContainer n1n6 = NodeContainer (c.Get (1), c.Get (6));
-  NodeContainer n2345 = NodeContainer (c.Get (2), c.Get (3), c.Get (4), c.Get (5));
+void
+GpsrExample::writeToFile(uint32_t lostPackets, uint32_t totalTx, uint32_t totalRx, double hopCount,double count, double delay){
 
-  InternetStackHelper internet;
-  internet.Install (c);
+  struct stat buf;
+    std::string outputfile = "results/"+algorithm+"_results/pairs"+std::to_string(nPairs)+"/"+algorithm+std::to_string(size)+"_results.txt";
+  //std::string outputfile = "results/pairs"+std::to_string(nPairs)+"/"+algorithm+std::to_string(size)+"_results.txt";
+  //std::string outputfile = "results/teste.txt";
+  int exist = stat(outputfile.c_str(), &buf);
 
-  // We create the channels first without any IP addressing information
-  NS_LOG_INFO ("Create channels.");
-  PointToPointHelper p2p;
-  p2p.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
-  p2p.SetChannelAttribute ("Delay", StringValue ("2ms"));
-  NetDeviceContainer d0d2 = p2p.Install (n0n2);
-  NetDeviceContainer d1d6 = p2p.Install (n1n6);
+  std::ofstream outfile;
+  outfile.open(outputfile.c_str(), std::ios::app);
 
-  NetDeviceContainer d1d2 = p2p.Install (n1n2);
+  if (outfile.is_open())
+  {
+    std::cout << "Output operation successfully performed1\n";
+  }
+  else
+  {
+    std::cout << "Error opening file";
+  }
 
-  p2p.SetDeviceAttribute ("DataRate", StringValue ("1500kbps"));
-  p2p.SetChannelAttribute ("Delay", StringValue ("10ms"));
-  NetDeviceContainer d5d6 = p2p.Install (n5n6);
+  if (newfile == true){
 
-  // We create the channels first without any IP addressing information
-  CsmaHelper csma;
-  csma.SetChannelAttribute ("DataRate", StringValue ("5Mbps"));
-  csma.SetChannelAttribute ("Delay", StringValue ("2ms"));
-  NetDeviceContainer d2345 = csma.Install (n2345);
+   std::ofstream outfile;
+   outfile.open(outputfile.c_str(), std::ios::trunc);
 
-  // Later, we add IP addresses.
-  NS_LOG_INFO ("Assign IP Addresses.");
-  Ipv4AddressHelper ipv4;
-  ipv4.SetBase ("10.1.1.0", "255.255.255.0");
-  ipv4.Assign (d0d2);
+   if (outfile.is_open())
+   {
+     std::cout << "Output operation successfully performed2\n";
+   }
+   else
+   {
+     std::cout << "Error opening file";
+   }
 
-  ipv4.SetBase ("10.1.2.0", "255.255.255.0");
-  ipv4.Assign (d1d2);
+    outfile<< "Seed\t"<<"LostPackets\t"<<"totalTx\t"<<"totalRx\t"<<"PDR (%)\t"<<"HopCount\t"<<"Delay (ms)\t"<<"PhyRxDrop\t"<<"PhyTxDrop\n";
+    outfile.flush();
+    exist = 1;
+   }
 
-  ipv4.SetBase ("10.1.3.0", "255.255.255.0");
-  Ipv4InterfaceContainer i5i6 = ipv4.Assign (d5d6);
+  if (exist == -1){
+        outfile<< "Seed\t"<<"LostPackets\t"<<"totalTx\t"<<"totalRx\t"<<"PDR (%)\t"<<"HopCount\t"<<"Delay (ms)\t"<<"PhyRxDrop\t"<<"PhyTxDrop\n";
+        outfile.flush();
+  }
 
-  ipv4.SetBase ("10.250.1.0", "255.255.255.0");
-  ipv4.Assign (d2345);
+  // write to outfile
+  outfile <<seed<<"\t"; //Lost packets
+  outfile.flush();
+  outfile <<lostPackets<<"\t"; //Lost packets
+  outfile.flush();
+  outfile <<(double)totalTx<<"\t"; //Total transmited packets
+  outfile.flush();
+  outfile <<(double)totalRx<<"\t"; //Total received packets
+  outfile.flush();
 
-  ipv4.SetBase ("172.16.1.0", "255.255.255.0");
-  Ipv4InterfaceContainer i1i6 = ipv4.Assign (d1d6);
+  if (count == 0){
 
-  // Create router nodes, initialize routing database and set up the routing
-  // tables in the nodes.
-  Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
+    outfile <<0<<"\t"; //PDR
+    outfile.flush();
+    outfile <<0<<"\t"; //Mean Hop Count
+    outfile.flush();
+    outfile <<0<<"\t"; //Mean Delay (ms)
+    outfile.flush();
 
-  // Create the OnOff application to send UDP datagrams of size
-  // 210 bytes at a rate of 448 Kb/s
-  NS_LOG_INFO ("Create Applications.");
-  uint16_t port = 9;   // Discard port (RFC 863)
-  OnOffHelper onoff ("ns3::UdpSocketFactory",
-                     InetSocketAddress (i5i6.GetAddress (1), port));
-  onoff.SetConstantRate (DataRate ("2kbps"));
-  onoff.SetAttribute ("PacketSize", UintegerValue (50));
+  }else{
 
-  ApplicationContainer apps = onoff.Install (c.Get (1));
-  apps.Start (Seconds (1.0));
-  apps.Stop (Seconds (10.0));
+    outfile <<std::fixed<<std::setprecision(2)<< ((double)totalRx/(double)totalTx)*100.0<<"\t"; //PDR
+    outfile.flush();
+    outfile <<std::fixed<<std::setprecision(2)<< hopCount/count<<"\t"; //Mean Hop Count
+    outfile.flush();
+    outfile <<std::fixed<<std::setprecision(2)<< delay/count * 1000<<"\t"; //Mean Delay (ms)
+    outfile.flush();
 
-  // Create a second OnOff application to send UDP datagrams of size
-  // 210 bytes at a rate of 448 Kb/s
-  OnOffHelper onoff2 ("ns3::UdpSocketFactory",
-                      InetSocketAddress (i1i6.GetAddress (1), port));
-  onoff2.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
-  onoff2.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
-  onoff2.SetAttribute ("DataRate", StringValue ("2kbps"));
-  onoff2.SetAttribute ("PacketSize", UintegerValue (50));
+  }
 
-  ApplicationContainer apps2 = onoff2.Install (c.Get (1));
-  apps2.Start (Seconds (11.0));
-  apps2.Stop (Seconds (16.0));
+  outfile <<rx_drop<<"\t";
+  outfile.flush();
+  outfile <<tx_drop<<"\n";
+  outfile.flush();
 
-  // Create an optional packet sink to receive these packets
-  PacketSinkHelper sink ("ns3::UdpSocketFactory",
-                         Address (InetSocketAddress (Ipv4Address::GetAny (), port)));
-  apps = sink.Install (c.Get (6));
-  apps.Start (Seconds (1.0));
-  apps.Stop (Seconds (10.0));
-
-  PacketSinkHelper sink2 ("ns3::UdpSocketFactory",
-                          Address (InetSocketAddress (Ipv4Address::GetAny (), port)));
-  apps2 = sink2.Install (c.Get (6));
-  apps2.Start (Seconds (11.0));
-  apps2.Stop (Seconds (16.0));
+  outfile.close();
 
 
-  AsciiTraceHelper ascii;
-  Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("dynamic-global-routing.tr");
-  p2p.EnableAsciiAll (stream);
-  csma.EnableAsciiAll (stream);
-  internet.EnableAsciiIpv4All (stream);
+}
 
-  p2p.EnablePcapAll ("dynamic-global-routing");
-  csma.EnablePcapAll ("dynamic-global-routing", false);
- 
-  Ptr<Node> n1 = c.Get (1);
-  Ptr<Ipv4> ipv41 = n1->GetObject<Ipv4> ();
-  // The first ifIndex is 0 for loopback, then the first p2p is numbered 1,
-  // then the next p2p is numbered 2
-  uint32_t ipv4ifIndex1 = 2;
+void
+GpsrExample::Run ()
+{
 
-  Simulator::Schedule (Seconds (2),&Ipv4::SetDown,ipv41, ipv4ifIndex1);
-  Simulator::Schedule (Seconds (4),&Ipv4::SetUp,ipv41, ipv4ifIndex1);
 
-  Ptr<Node> n6 = c.Get (6);
-  Ptr<Ipv4> ipv46 = n6->GetObject<Ipv4> ();
-  // The first ifIndex is 0 for loopback, then the first p2p is numbered 1,
-  // then the next p2p is numbered 2
-  uint32_t ipv4ifIndex6 = 2;
-  Simulator::Schedule (Seconds (6),&Ipv4::SetDown,ipv46, ipv4ifIndex6);
-  Simulator::Schedule (Seconds (8),&Ipv4::SetUp,ipv46, ipv4ifIndex6);
+  SeedManager::SetSeed(seed);
 
-  Simulator::Schedule (Seconds (12),&Ipv4::SetDown,ipv41, ipv4ifIndex1);
-  Simulator::Schedule (Seconds (14),&Ipv4::SetUp,ipv41, ipv4ifIndex1);
+  CreateNodes ();
+  CreateDevices ();
+  InstallInternetStack ();
+  InstallApplications ();
 
-  // Trace routing tables 
-  Ipv4GlobalRoutingHelper g;
-  Ptr<OutputStreamWrapper> routingStream = Create<OutputStreamWrapper> ("dynamic-global-routing.routes", std::ios::out);
-  g.PrintRoutingTableAllAt (Seconds (12), routingStream);
+if (algorithm=="gpsr"){
+  std::cout<<"Using GPSR algorithm...\n";
+  GpsrHelper gpsr;
+  gpsr.Install ();
 
-  NS_LOG_INFO ("Run Simulation.");
+}else{
+  if (algorithm=="mmgpsr"){
+    std::cout<<"Using MMGPSR algorithm...\n";
+    MMGpsrHelper mmgpsr;
+    mmgpsr.Install ();
+  }else{
+    std::cout<<"Using PA-GPSR algorithm...\n";
+    PAGpsrHelper pagpsr;
+    pagpsr.Install ();
+
+  }
+}
+  std::cout << "Starting simulation for " << totalTime << " s ...\n";
+  std::cout << "Starting simulation for speed " << speed << " ms ...\n";
+
+  for (int i=1; i<=totalTime; i++){
+    if (i % 10 == 0) // at every 10s
+      Simulator::Schedule(Seconds(i), &handler, i);
+  }
+
+
+  FlowMonitorHelper flowmon;
+  Ptr<FlowMonitor> monitor = flowmon.InstallAll();
+  Simulator::Stop (Seconds (totalTime));
   Simulator::Run ();
+
+ //Print per flow statstics
+monitor->CheckForLostPackets();
+Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowmon.GetClassifier());
+std::map<FlowId,FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
+uint32_t lostPackets = 0;
+uint32_t totalRx=0;
+uint32_t totalTx=0;
+double delay=0;
+double count=0;
+double hopCount=0;
+
+
+for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i= stats.begin();i!=stats.end();++i)
+{
+  Ipv4FlowClassifier::FiveTuple t=classifier->FindFlow(i->first);
+
+   if(i->second.rxPackets!=0)
+     {
+        totalRx+=i->second.rxPackets;
+        totalTx+=i->second.txPackets;
+        hopCount+=(i->second.timesForwarded/i->second.rxPackets+1); // this hopCount is not suitable for PA-GPSR because of packet duplication. For PA-GPSR HopCount calculation we need to use the IP TTL field instead (not implemented yet). This hopCount can be helpful to calculate network yield though.
+        delay+=(i->second.delaySum.GetSeconds()/i->second.rxPackets);
+        count++;
+        lostPackets += i->second.lostPackets;
+    }
+}
+
+writeToFile(lostPackets, totalTx, totalRx, hopCount, count, delay);
+
+
+monitor->SerializeToXmlFile("gpsr.flowmon",true,true);
+
   Simulator::Destroy ();
-  NS_LOG_INFO ("Done.");
+}
+
+void
+GpsrExample::Report (std::ostream &)
+{
+}
+
+void
+GpsrExample::CreateNodes ()
+{
+
+ std::cout << "Creating  " << (unsigned)size << " nodes .."<<" with "<<nPairs<<" pairs..." <<"\n";
+  nodes.Create (size);
+  // Name nodes
+  for (uint32_t i = 0; i < size; ++i)
+     {
+       std::ostringstream os;
+       os << "node-" << i;
+       Names::Add (os.str (), nodes.Get (i));
+
+     }
+
+  std::string m_traceFile;
+  m_traceFile = "/home/aleksey/work/PA-GPSR/results/tclFiles/speed/"+std::to_string(speed)+"/newNs2mobility"+std::to_string(size)+".tcl";
+  Ns2MobilityHelper mobility= Ns2MobilityHelper (m_traceFile);//for tracefile
+  mobility.Install ();
+
+  AllNodes.Add(nodes);
+
+}
+
+void
+GpsrExample::CreateDevices ()
+{
+
+Wifi80211pHelper wifi = Wifi80211pHelper::Default ();
+
+YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
+YansWifiChannelHelper wifiChannel;
+
+wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+wifiChannel.AddPropagationLoss ("ns3::RangePropagationLossModel",
+				  "MaxRange", DoubleValue (250.0));
+wifiChannel.AddPropagationLoss ("ns3::TwoRayGroundPropagationLossModel",
+								    "SystemLoss", DoubleValue(1),
+								    "HeightAboveZ", DoubleValue(1.5));
+
+
+  // For range near 250m
+  wifiPhy.Set ("TxPowerStart", DoubleValue(33));
+  wifiPhy.Set ("TxPowerEnd", DoubleValue(33));
+  wifiPhy.Set ("TxPowerLevels", UintegerValue(1));
+  wifiPhy.Set ("TxGain", DoubleValue(0));
+  wifiPhy.Set ("RxGain", DoubleValue(0));
+  wifiPhy.Set ("RxSensitivity", DoubleValue(-61.8));
+  wifiPhy.Set ("CcaEdThreshold", DoubleValue(-64.8));
+
+ wifiPhy.SetChannel (wifiChannel.Create ());
+
+NqosWaveMacHelper wifiMac = NqosWaveMacHelper::Default ();
+
+ wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                "DataMode",StringValue(phyMode),
+                                   "ControlMode",StringValue(phyMode));
+devices = wifi.Install (wifiPhy, wifiMac, AllNodes);
+
+wifiPhy.EnablePcapAll ("wifi-pcap");
+
+}
+
+
+void
+GpsrExample::InstallInternetStack ()
+{
+  InternetStackHelper stack;
+  std::string prefix = "10.0.0.";
+  std::string sufix_dst = std::to_string(destinationNode+1); //the nodes numbers starts from zero, so we need to add 1 for the IP addresses
+  std::string sufix_source = std::to_string(sourcenode+1);
+  std::string dst_s = prefix+sufix_dst;
+  std::string source_s = prefix+sufix_source;
+  char const *dst_c = dst_s.c_str();
+  char const *source_c = source_s.c_str();
+
+if (algorithm=="gpsr"){
+  GpsrHelper gpsr;
+  stack.SetRoutingHelper (gpsr);
+  stack.Install (AllNodes);
+}else{
+  if(algorithm=="pagpsr"){
+  PAGpsrHelper pagpsr;
+  stack.SetRoutingHelper (pagpsr);
+  stack.Install (AllNodes);
+  }
+  else{
+    MMGpsrHelper mmgpsr;
+    stack.SetRoutingHelper (mmgpsr);
+    stack.Install (AllNodes);
+  }
+}
+
+
+  Ipv4AddressHelper address;
+  address.SetBase ("10.0.0.0", "255.255.0.0");
+  interfaces = address.Assign (devices);
+
+}
+void
+GpsrExample::InstallApplications ()
+{
+
+  uint16_t port = 9;  // well-known echo port number
+
+  uint32_t maxPacketCount = 10000; // number of packets to transmit
+  Time interPacketInterval = Seconds (0.2); // interval between packet transmissions
+  UdpEchoServerHelper server1 (port);
+  ApplicationContainer apps;
+
+  srand(276); //same seed to random pairs be the same at all simulations, can be any number (use 276 to reproduce our results)
+
+  int source;
+  int dest;
+  std::vector<std::pair<int,int>> source_dest_pairs;
+  std::vector<std::pair<int,int>>::iterator it;
+  bool exist;
+  float start_app;
+  for (uint32_t i = 0; i < nPairs ; i++){
+        source = 0;
+        dest = 0;
+        exist = true;
+        start_app = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+        while((source == dest) || exist == true){
+
+             source = rand() % size;
+             dest = rand() % size;
+             it = std::find(source_dest_pairs.begin(), source_dest_pairs.end(), std::make_pair(source,dest));
+             if (it != source_dest_pairs.end()){
+                exist = true;
+             }else{
+                source_dest_pairs.push_back(std::make_pair(source,dest));
+                exist = false;
+             }
+        }
+        UdpEchoClientHelper client (interfaces.GetAddress (dest), port);
+        client.SetAttribute ("MaxPackets", UintegerValue (maxPacketCount));
+        client.SetAttribute ("Interval", TimeValue (interPacketInterval));
+        client.SetAttribute ("PacketSize", UintegerValue (packetsize));
+        apps = client.Install (nodes.Get (source));
+        apps.Start (Seconds (start_app));
+        apps.Stop (Seconds (totalTime-0.1));
+  }
+
+  Config::ConnectWithoutContext("/NodeList/0/DeviceList/0/$ns3::WifiNetDevice/Phy/PhyRxDrop", MakeCallback(&PRxDrop));
+  Config::ConnectWithoutContext("/NodeList/0/DeviceList/0/$ns3::WifiNetDevice/Phy/PhyTxDrop", MakeCallback(&PTxDrop));
 }

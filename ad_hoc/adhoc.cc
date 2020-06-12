@@ -59,52 +59,59 @@ RoutingHelper::Install (NodeContainer & c,
 void
 RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
 {
-  Ipv4RoutingHelper* routing = nullptr;
-  Ptr<Ipv4RoutingProtocol> prot;
-  const uint16_t prior = 100;
+  //const uint16_t prior = 100;
   std::vector<std::pair<std::string, ns3::AttributeValue*> > attr_val_list;
 
-  Ipv4ListRoutingHelper list;
+  //Ipv4ListRoutingHelper list;
   InternetStackHelper internet;
 
   if(m_protocol == "AODV")
   {
-    routing = new AodvHelper;
+    AodvHelper routing;
+    internet.SetRoutingHelper (routing);
+    internet.Install (c);
+
     attr_val_list.push_back(std::make_pair("EnableHello", new BooleanValue(false)));
   }
   else if(m_protocol == "OLSR")
   {
-    routing = new OlsrHelper;
-    attr_val_list.push_back(std::make_pair("HelloInterval", new TimeValue(Seconds (1.0))));
+    OlsrHelper routing;
+    internet.SetRoutingHelper (routing);
+    internet.Install (c);
+
+    attr_val_list.push_back(std::make_pair("HelloInterval", new TimeValue(Seconds (0.5))));
   }
   else if(m_protocol == "GPSR")
   {
-    routing = new GpsrHelper;
+    GpsrHelper routing;
+    internet.SetRoutingHelper (routing);
+    internet.Install (c);
+    routing.Install(c);
+
     attr_val_list.push_back(std::make_pair("HelloInterval", new TimeValue(Seconds (1.0))));
   }
   else if(m_protocol == "PAGPSR")
   {
-    routing = new PAGpsrHelper;
+    PAGpsrHelper routing;
+    internet.SetRoutingHelper (routing);
+    internet.Install (c);
+    routing.Install(c);
+
     attr_val_list.push_back(std::make_pair("HelloInterval", new TimeValue(Seconds (1.0))));
   }
   else if(m_protocol == "MMGPSR")
   {
-    routing = new MMGpsrHelper;
+    MMGpsrHelper routing;
+    internet.SetRoutingHelper (routing);
+    internet.Install (c);
+    routing.Install(c);
+
     attr_val_list.push_back(std::make_pair("HelloInterval", new TimeValue(Seconds (1.0))));
   }
   else
   {
 
   }
-
-  if(routing)
-  {
-    list.Add(*routing, prior);
-    internet.SetRoutingHelper (list);
-    delete routing;
-  }
-
-  internet.Install (c);
 
   for(auto it = c.Begin(); it != c.End(); it++)
   {
@@ -132,20 +139,10 @@ RoutingHelper::AssignIpAddresses (NetDeviceContainer & d,
                                   Ipv4InterfaceContainer & adhocTxInterfaces)
 {
   NS_LOG_INFO ("Assigning IP addresses");
-  Ipv4AddressHelper addressAdhoc;
-  // we may have a lot of nodes, and want them all
-  // in same subnet, to support broadcast
-  NS_LOG_INFO ("Calculate mask:");
-
-  addressAdhoc.SetBase ("10.0.1.0", "255.255.255.0");
-
-  adhocTxInterfaces = addressAdhoc.Assign (d);
   uint16_t cntr = 1;
-  for(auto it = adhocTxInterfaces.Begin(); it != adhocTxInterfaces.End(); it++)
+  for (auto it = d.Begin(); it != d.End(); it++)
   {
-    Ptr<Ipv4> ip = it->first;
-
-    std::string n = Names::FindName(ip->GetNetDevice(it->second)->GetNode());
+    std::string n = Names::FindName((*it)->GetNode());
     if(n.empty() == false)
     {
       std::size_t s = n.find_last_of('n');
@@ -154,15 +151,12 @@ RoutingHelper::AssignIpAddresses (NetDeviceContainer & d,
         n = n.substr(s + 1);
       }
     }
-    else
-    {
-      n = std::to_string(cntr);
-    }
+    //std::string a = "10.0.1." + n;
+    std::string a = "0.0.0." + n;
 
-    std::string a = "10.0.1." + n;
-    Ipv4InterfaceAddress addr(Ipv4Address(a.c_str()), Ipv4Mask(0xFFFFFF00));
-    ip->RemoveAddress(it->second, 0);
-    ip->AddAddress(it->second, addr);
+    Ipv4AddressHelper addressAdhoc;
+    addressAdhoc.SetBase("10.0.1.0", "255.255.255.0", a.c_str());
+    adhocTxInterfaces.Add(addressAdhoc.Assign(NetDeviceContainer(*it)));
 
     cntr++;
   }
@@ -177,18 +171,7 @@ RoutingHelper::GetStatsCollector ()
 void
 RoutingHelper::ConfigureTracing()
 {
-    AsciiTraceHelper ascii;
-
-  if(m_protocol == "AODV")
-  {
-  }
-  else if(m_protocol == "OLSR")
-  {
-  }
-  else if(m_protocol == "GPSR")
-  {
-
-  }
+  AsciiTraceHelper ascii;
 
   m_ip_lev_tracer.SetDumpInterval(1.0);
   m_ip_lev_tracer.CreateOutput("ipv4.csv");

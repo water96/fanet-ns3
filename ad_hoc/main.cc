@@ -20,12 +20,15 @@
 #include "ns3/animation-interface.h"
 #include "ns3/point-to-point-helper.h"
 
+
 #include "utils/tracers.h"
 #include "fanetrouting.h"
 #include "utils/script.h"
 #include "time.h"
 
 using namespace ns3;
+
+
 
 class ScalarsByNodesTracer : public TracerBase
 {
@@ -270,7 +273,7 @@ int main(int argc, char **argv)
   CommandLine cmd;
   cmd.Usage ("FANET simulation program.\n");
 
-  uint32_t num_nodes = 8;
+  uint32_t num_nodes = 4;
   cmd.AddValue ("nodes",  "Number of nodes", num_nodes);
 
   std::string mobility = "GM";
@@ -285,7 +288,7 @@ int main(int argc, char **argv)
   double total_time = 200.0;
   cmd.AddValue ("time", "Time to simulate", total_time);
 
-  double speed = 200.0;
+  double speed = 100.0;
   cmd.AddValue ("speed", "Average speed of nodes", speed);
 
   uint32_t seed_num = RngSeedManager::GetSeed();
