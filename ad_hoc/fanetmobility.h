@@ -103,5 +103,15 @@ public:
   uint32_t Install(const ns3::NodeContainer& c, uint32_t stream_index) override;
 };
 
+//=====================================//
 
+class PPRZFANETMobility : public FanetMobility
+{
+private:
+  virtual FanetMobility* Clone() const override;
+public:
+  PPRZFANETMobility() = default;
+  virtual ~PPRZFANETMobility();
+  uint32_t Install(const ns3::NodeContainer& c, uint32_t stream_index) override;
+};
 #endif // FANETMOBILITY_H

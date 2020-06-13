@@ -276,7 +276,7 @@ int main(int argc, char **argv)
   uint32_t num_nodes = 4;
   cmd.AddValue ("nodes",  "Number of nodes", num_nodes);
 
-  std::string mobility = "GM";
+  std::string mobility = "PPRZ";
   cmd.AddValue ("mobility",  "Mobility model", mobility);
 
   std::string routing = "PAGPSR";

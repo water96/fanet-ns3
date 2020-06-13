@@ -76,7 +76,7 @@ def parse_cmd_args(argv):
   pass
 
 def create_arg_list(param_arr, out_dir):
-  a = ["parallel"]
+  a = ["parallel" , "-j10"]
   exec_name = MODEL_EXEC + " --mobility={1} --routing={2} --nodes={3} --speed={4} --run={5} --out-dir=" + out_dir
   a.append(exec_name)
   for p in param_arr:

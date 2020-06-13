@@ -1,4 +1,4 @@
-function create_connectivity_figure(X1, X2, YMatrix1, YMatrix2, YMatrix3, text)
+function create_connectivity_figure(X1, X2, YMatrix1, YMatrix2, YMatrix3, text, ttl)
 %CREATEFIGURE(X1, YMATRIX1, YMATRIX2, YMATRIX3)
 %  X1:  vector of x data
 %  YMATRIX1:  matrix of y data
@@ -24,7 +24,7 @@ for i = 1:length(X2)
 end
 
 % Create title
-title('Зависимость коэффициента связности от скорости узлов');
+title(sprintf('Зависимость коэффициента связности от скорости узлов (%s)', ttl));
 
 grid(subplot1,'on');
 % Create subplot

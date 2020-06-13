@@ -1,5 +1,7 @@
 #include "fanetmobility.h"
 
+#include "ns3/paparazzi-mobility-model.h"
+
 using namespace ns3;
 
 //Creator
@@ -15,6 +17,7 @@ FanetMobilityCreator::FanetMobilityCreator() : m_inst(nullptr)
   m_models.insert(std::make_pair("RWP", new RWPFANETMobility));
   m_models.insert(std::make_pair("CONST", new CONSTFANETMobility));
   m_models.insert(std::make_pair("GM", new GMFANETMobility));
+  m_models.insert(std::make_pair("PPRZ", new PPRZFANETMobility));
 
   m_default = m_models.begin()->first;
 }
@@ -243,8 +246,8 @@ uint32_t GMFANETMobility::Install(const ns3::NodeContainer& c, uint32_t stream_i
                                   "NormalDirection", StringValue ("ns3::NormalRandomVariable[Mean=0.0|Variance=" + std::to_string(d_dev) + "|Bound=" + std::to_string(3*sqrt(d_dev)) + "]"),
                                   "NormalPitch", StringValue ("ns3::NormalRandomVariable[Mean=0.0|Variance=" + std::to_string(p_dev) + "|Bound=" + std::to_string(sqrt(p_dev)) + "]"));
 
-  m_sindex += mobilityAdhoc.AssignStreams (m_nodes, m_sindex);
   mobilityAdhoc.Install (m_nodes);
+  m_sindex += mobilityAdhoc.AssignStreams (m_nodes, m_sindex);
 
   //Initial pos
   Ptr<PositionAllocator> initial_pos = CreateInitialPositionAllocater();
@@ -306,8 +309,8 @@ uint32_t CONSTFANETMobility::Install(const ns3::NodeContainer& c, uint32_t strea
 
   mobilityAdhoc.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
-  m_sindex += mobilityAdhoc.AssignStreams (m_nodes, m_sindex);
   mobilityAdhoc.Install (m_nodes);
+  m_sindex += mobilityAdhoc.AssignStreams (m_nodes, m_sindex);
 
   //Initial pos
   Ptr<PositionAllocator> initial_pos = CreateInitialPositionAllocater();
@@ -323,3 +326,61 @@ uint32_t CONSTFANETMobility::Install(const ns3::NodeContainer& c, uint32_t strea
 
   return m_sindex;
 }
+
+//=====================================//
+
+
+PPRZFANETMobility::~PPRZFANETMobility()
+{
+
+}
+
+FanetMobility* PPRZFANETMobility::Clone() const
+{
+  return new PPRZFANETMobility();
+}
+
+
+uint32_t PPRZFANETMobility::Install(const ns3::NodeContainer& c, uint32_t stream_index)
+{
+  m_nodes = c;
+  m_sindex = stream_index;
+
+  //Initial pos
+  Ptr<PositionAllocator> initial_pos = CreateInitialPositionAllocater();
+  double a;
+
+  if(m_area.x > m_area.y)
+  {
+    a = m_area.y;
+  }
+  else
+  {
+    a = m_area.x;
+  }
+
+  MobilityHelper mobilityAdhoc;
+
+  for(auto it = m_nodes.Begin(); it != m_nodes.End(); it++)
+  {
+    MobilityHelper mobilityAdhoc;
+    ns3::UniformRandomVariable radius;
+    radius.SetStream(m_sindex);
+    NodeContainer one_node(*it);
+
+    mobilityAdhoc.SetMobilityModel ("ns3::PaparazziMobilityModel",
+                                    "Radius", DoubleValue (a / radius.GetValue(2.0, 10.0)),
+                                    "Bounds", BoxValue (Box (0, m_area.x, 0, m_area.y, 0.8*m_area.z, 1.2*m_area.z)),
+                                    "Speed", DoubleValue(m_speed),
+                                    "TimeStep", DoubleValue(radius.GetValue(0.5, 2.5)),
+                                    "CircleRad", DoubleValue(a / radius.GetValue(25, 150)));
+
+    mobilityAdhoc.SetPositionAllocator(initial_pos);
+    mobilityAdhoc.Install (one_node);
+    m_sindex += mobilityAdhoc.AssignStreams (one_node, m_sindex);
+  }
+
+  return m_sindex;
+}
+
+//=====================================//
