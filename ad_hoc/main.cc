@@ -273,10 +273,10 @@ int main(int argc, char **argv)
   CommandLine cmd;
   cmd.Usage ("FANET simulation program.\n");
 
-  uint32_t num_nodes = 4;
+  uint32_t num_nodes = 8;
   cmd.AddValue ("nodes",  "Number of nodes", num_nodes);
 
-  std::string mobility = "PPRZ";
+  std::string mobility = "RPGM";
   cmd.AddValue ("mobility",  "Mobility model", mobility);
 
   std::string routing = "PAGPSR";

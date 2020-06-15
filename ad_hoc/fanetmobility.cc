@@ -1,6 +1,7 @@
 #include "fanetmobility.h"
 
 #include "ns3/paparazzi-mobility-model.h"
+#include <cstdlib>
 
 using namespace ns3;
 
@@ -18,6 +19,7 @@ FanetMobilityCreator::FanetMobilityCreator() : m_inst(nullptr)
   m_models.insert(std::make_pair("CONST", new CONSTFANETMobility));
   m_models.insert(std::make_pair("GM", new GMFANETMobility));
   m_models.insert(std::make_pair("PPRZ", new PPRZFANETMobility));
+  m_models.insert(std::make_pair("RPGM", new RPGMFANETMobility));
 
   m_default = m_models.begin()->first;
 }
@@ -381,6 +383,87 @@ uint32_t PPRZFANETMobility::Install(const ns3::NodeContainer& c, uint32_t stream
   }
 
   return m_sindex;
+}
+
+//=====================================//
+
+RPGMFANETMobility::~RPGMFANETMobility()
+{
+
+}
+
+FanetMobility* RPGMFANETMobility::Clone() const
+{
+  return new RPGMFANETMobility();
+}
+
+std::string RPGMFANETMobility::GetScenarioName(uint32_t n, double s)
+{
+  std::stringstream ss;
+  ss << "RPGM_" << n << "_" << s;
+  return ss.str();
+}
+
+std::string RPGMFANETMobility::CreateBmCommandString(const std::string& bm_path, uint32_t n, uint32_t r_seed, double s, double t, const ns3::Vector3D& area)
+{
+  std::stringstream ss;
+  double r;
+  if(area.x > area.y)
+  {
+    r = area.y * 0.1;
+  }
+  else
+  {
+    r = area.x * 0.1;
+  }
+  ss << bm_path << "/bm -f RPGM_" << n << "_" << s << " RPGM "
+     << "-d " << t << " -i 100 -n " << n << " -x " << area.x << " -y " << area.y << " -J 2D -R " << r_seed
+     << " -h " << (s + 10) << " -l " << (s - 10) << " -p 0 "
+     << "-a " << (double)(n / 3.0) << " -c 0.75 -r " << r << " -s " << (double)(n / 2.0);
+
+  ss << "; " << bm_path << "/bm NSFile -f RPGM_" << n << "_" << s << " -b";
+  return ss.str();
+}
+
+uint32_t RPGMFANETMobility::Install(const ns3::NodeContainer& c, uint32_t stream_index)
+{
+  m_nodes = c;
+  m_sindex = stream_index;
+
+  Ptr<ns3::UniformRandomVariable> var = CreateObject<ns3::UniformRandomVariable>();
+  var->SetStream(m_sindex);
+
+  char* bm_tool_path = std::getenv("BM_TOOL");
+  if(bm_tool_path == nullptr)
+  {
+    std::cerr << "Can not find bm tool environment variable!\n Set BM_TOOL var\n";
+    return m_sindex;
+  }
+
+  std::string cmd_str = CreateBmCommandString(bm_tool_path,
+                                              c.GetN(),
+                                              var->GetInteger(),
+                                              m_speed,
+                                              m_sim_time.GetSeconds(),
+                                              m_area);
+
+  int res = std::system(cmd_str.c_str());
+
+  if(res != 0)
+  {
+    std::cerr << "Error to create trace file!\n";
+    return 1;
+  }
+
+  std::string filename = GetScenarioName(c.GetN(), m_speed) + ".ns_movements";
+  Ns2MobilityHelper ns2m(filename);
+
+  var->SetAttribute ("Min", DoubleValue (m_area.z - 300));
+  var->SetAttribute ("Max", DoubleValue (m_area.z + 300));
+  ns2m.SetZCoord(var);
+  ns2m.Install(c.Begin(), c.End());
+
+  return (m_sindex++);
 }
 
 //=====================================//

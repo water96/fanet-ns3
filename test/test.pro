@@ -14,6 +14,15 @@ CONFIG(release, debug|release){
     NS3_LIB_POSTFIX = 'debug'
 }
 
+INCLUDEPATH += $$PWD/../
+
+HEADERS += \
+    $$PWD/../utils/tracers.h
+
+SOURCES += \
+    $$PWD/../utils/tracers.cc
+
+
 SOURCES += \
     dynamic-global-routing.cc
 

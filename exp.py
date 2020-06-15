@@ -68,6 +68,10 @@ def parse_cmd_args(argv):
                   metavar=ROUTING_STRING_DEFAULT,
                   help="Names of routing")
 
+  parser.add_option("-j", "--jobs", action="store", type="string", dest="jobs", default="10",
+                metavar="JOBS",
+                help="Number of jobs")
+
   parser.add_option("-b", "--bunch-string", action="store", dest="mod_str", default="",
                   help="Compact string representation in format M-R-N-V-S")
 
@@ -75,8 +79,8 @@ def parse_cmd_args(argv):
   return options
   pass
 
-def create_arg_list(param_arr, out_dir):
-  a = ["parallel" , "-j10"]
+def create_arg_list(param_arr, out_dir, jobs):
+  a = ["parallel" , "-j" + jobs]
   exec_name = MODEL_EXEC + " --mobility={1} --routing={2} --nodes={3} --speed={4} --run={5} --out-dir=" + out_dir
   a.append(exec_name)
   for p in param_arr:
@@ -85,10 +89,10 @@ def create_arg_list(param_arr, out_dir):
 
   return a
 
-def run_all(param_tuple, out_dir, log=""):
+def run_all(param_tuple, out_dir, jobs, log=""):
   print("Create args list...")
 
-  args = create_arg_list(list(param_tuple), out_dir)
+  args = create_arg_list(list(param_tuple), out_dir, jobs)
 
   total = 1
   for a in param_tuple:
@@ -137,6 +141,6 @@ if __name__ == '__main__':
   print('\t m: %s\n\t r: %s\n\t n: %s\n\t v: %s\n\t s: %s' % t)
 
   opt.out_dir = os.path.abspath(opt.out_dir)
-  rc = run_all(t, opt.out_dir, opt.log_file_name)
+  rc = run_all(t, opt.out_dir, opt.jobs, opt.log_file_name)
   print('Done cript %s with rc = %d%s' % (sys.argv[0], rc, STRING_DELIM))
   sys.exit(rc)

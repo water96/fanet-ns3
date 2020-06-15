@@ -114,4 +114,18 @@ public:
   virtual ~PPRZFANETMobility();
   uint32_t Install(const ns3::NodeContainer& c, uint32_t stream_index) override;
 };
+
+//=====================================//
+
+class RPGMFANETMobility : public FanetMobility
+{
+private:
+  virtual FanetMobility* Clone() const override;
+  static std::string CreateBmCommandString(const std::string& bm_path, uint32_t n, uint32_t r_seed, double s, double t, const ns3::Vector3D& area);
+  static std::string GetScenarioName(uint32_t n, double s);
+public:
+  RPGMFANETMobility() = default;
+  virtual ~RPGMFANETMobility();
+  uint32_t Install(const ns3::NodeContainer& c, uint32_t stream_index) override;
+};
 #endif // FANETMOBILITY_H

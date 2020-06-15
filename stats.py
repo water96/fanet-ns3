@@ -123,6 +123,7 @@ def run_calc(dest_dir, target=DEFAULT_TARGET, output=DEFAULT_OUTPUT):
   print("Done with csv files reading! Totally We have %d headers! Calculate mean and std statistical params..." % len(val_vec))
   
   mean_vec = calc_mean(val_vec)
+  mean_vec = mean_vec + 0.000001
   std_vec = calc_std(val_vec)
   mean_file_name = "mean-" + output
   std_file_name = "std-" + output

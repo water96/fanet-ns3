@@ -1373,7 +1373,6 @@ public:
     packetsReceivedAll =  m_stats.GetRxPkts();
     packetsTransmitedAll =  m_stats.GetTxPkts();
 
-    //if(packetsReceivedAll >= packetsTransmitedAll)
     if(m_tx_addr_pid.empty())
     {
       m_connect_cnter++;
