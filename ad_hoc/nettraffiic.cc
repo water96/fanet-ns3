@@ -135,17 +135,23 @@ uint32_t UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer&
   m_sindex = stream_index;
 
   Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
-  var->SetStream(m_sindex);
+  var->SetStream(m_sindex++);
 
   TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
-  Ptr<Node> src_node = nc.Get (0);
+  auto src_ifs = ip_c.Get(var->GetInteger(0, ip_c.GetN() - 1));
+  Ptr<Node> src_node = src_ifs.first->GetNetDevice(src_ifs.second)->GetNode();
   std::string src_name_node = Names::FindName(src_node);
-  Ipv4Address src_addr = ip_c.GetAddress(0);
 
   double start = 0;
   uint16_t cnter = 1;
-  for(auto it = ip_c.Begin() + 1; it != ip_c.End(); it++)
+  var->SetStream(m_sindex++);
+  for(auto it = ip_c.Begin(); it != ip_c.End(); it++)
   {
+    if( (*it) == src_ifs )
+    {
+      continue;
+    }
+
     Ptr<Node> n = it->first->GetNetDevice(it->second)->GetNode();
     std::string n_name = Names::FindName(n);
     Ipv4Address rem = it->first->GetAddress(it->second, 0).GetLocal();
@@ -168,7 +174,7 @@ uint32_t UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer&
     cnter++;
   }
 
-  return (m_sindex += ip_c.GetN());
+  return m_sindex;
 }
 
 int UdpCbrTraffic::ConfigreTracing()
@@ -308,18 +314,24 @@ uint32_t UdpClientServerTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceC
   m_sindex = stream_index;
 
   Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
-  var->SetStream(m_sindex);
+  var->SetStream(m_sindex++);
 
   uint16_t port = 109;  // well-known echo port number
-  Ptr<Node> src_node = nc.Get (0);
+
+  auto src_ifs = ip_c.Get(var->GetInteger(0, ip_c.GetN() - 1));
+  Ptr<Node> src_node = src_ifs.first->GetNetDevice(src_ifs.second)->GetNode();
   std::string src_name_node = Names::FindName(src_node);
-  Ipv4Address src_addr = ip_c.GetAddress(0);
 
   NodeContainer src_node_c(src_node);
   NodeContainer dst_node_c;
 
   for (auto ipf = ip_c.Begin() + 1; ipf != ip_c.End(); ipf++)
   {
+    if( (*ipf) == src_ifs )
+    {
+      continue;
+    }
+
     ApplicationContainer apps;
     uint32_t iid = (*ipf).second;
     Ptr<Node> dst_node = (*ipf).first->GetNetDevice(iid)->GetNode();
@@ -332,6 +344,7 @@ uint32_t UdpClientServerTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceC
     client.SetAttribute ("Interval", TimeValue(Seconds(m_interval)));
     client.SetAttribute ("PacketSize", UintegerValue (m_pckt_size));
     apps = client.Install(src_node_c);
+    var->SetStream(m_sindex++);
     apps.Start(Seconds (var->GetValue(0.05, 0.4)));
   }
 
@@ -339,7 +352,7 @@ uint32_t UdpClientServerTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceC
   ApplicationContainer apps = server.Install (dst_node_c);
   apps.Start (Seconds (0.0));
 
-  return (m_sindex += ip_c.GetN());
+  return m_sindex;
 }
 
 int UdpClientServerTraffic::ConfigreTracing()

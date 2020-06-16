@@ -1,4 +1,4 @@
-
+addpath('/home/aleksey/work/export_fig')
 if strcmp(pref, '')
     print('Error!')
 end

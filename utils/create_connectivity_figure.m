@@ -66,4 +66,7 @@ legend1 = legend(subplot3,'show');
 set(legend1,...
     'Position',[0.33025641025641 0.0107015457788347 0.368205128205128 0.0487514863258025],...
     'Orientation','horizontal');
-
+name=strcat(ttl, '.png');
+set(gcf, 'Position', [0, 0, 700, 900]);
+saveas(gcf, name);
+export_fig name;
