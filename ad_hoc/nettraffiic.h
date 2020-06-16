@@ -36,7 +36,7 @@ public:
   virtual void SetSimulationTime(double t);
   virtual uint64_t GetStreamIndex() const;
   virtual double GetTotalSimTime() const;
-  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) = 0;
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index, double start_time) = 0;
   virtual int ConfigreTracing() = 0;
 
 };
@@ -57,7 +57,7 @@ public:
 
   PingTraffic();
   virtual ~PingTraffic();
-  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) override;
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index, double start_time) override;
   virtual int ConfigreTracing() override;
 };
 
@@ -69,6 +69,7 @@ private:
   std::vector<std::pair<ns3::Ptr<ns3::Socket>, ns3::Ptr<ns3::Socket> > > m_pair_sockets;
   uint16_t m_pckt_size;
   double m_interval;
+  double m_start;
 
   void GenerateTraffic(ns3::Ptr<ns3::Socket> socket);
 
@@ -83,7 +84,7 @@ public:
   }
   UdpCbrTraffic();
   virtual ~UdpCbrTraffic();
-  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) override;
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index, double start_time) override;
   virtual int ConfigreTracing() override;
   //to callbacks
   void RxCb(ns3::Ptr<ns3::Socket> socket);
@@ -96,6 +97,7 @@ private:
   ns3::NetDeviceContainer m_devs;
   uint16_t m_pckt_size;
   double m_interval;
+  double m_start;
   void GenerateTraffic(ns3::Ptr<ns3::Socket> socket);
 
   virtual NetTraffic* Clone() const override;
@@ -113,7 +115,7 @@ public:
 
   L3NodesDiscoverTraffic();
   virtual ~L3NodesDiscoverTraffic();
-  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) override;
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index, double start_time) override;
   virtual int ConfigreTracing() override;
 
 
@@ -127,6 +129,7 @@ class UdpClientServerTraffic : public NetTraffic
 private:
   uint16_t m_pckt_size;
   double m_interval;
+  double m_start;
 
   virtual NetTraffic* Clone() const override;
 public:
@@ -139,7 +142,7 @@ public:
   }
   UdpClientServerTraffic();
   virtual ~UdpClientServerTraffic();
-  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index) override;
+  virtual uint32_t Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index, double start_time) override;
   virtual int ConfigreTracing() override;
 };
 #endif // NETTRAFFIIC_H

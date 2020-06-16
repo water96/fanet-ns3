@@ -169,11 +169,11 @@ RoutingHelper::GetStatsCollector ()
 }
 
 void
-RoutingHelper::ConfigureTracing()
+RoutingHelper::ConfigureTracing(double start_time)
 {
   AsciiTraceHelper ascii;
 
-  m_ip_lev_tracer.SetDumpInterval(1.0);
+  m_ip_lev_tracer.SetDumpInterval(1.0, start_time);
   m_ip_lev_tracer.CreateOutput("ipv4.csv");
 
   //Through ip interaces

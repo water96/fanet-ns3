@@ -59,6 +59,7 @@ private:
   std::string m_mob_scenario;
   std::string m_rout_prot;
   double m_total_sim_time;
+  double m_trans_time;
   std::string m_traffic_model;
 
   double m_txp; ///< distance

@@ -72,7 +72,7 @@ int PingTraffic::ConfigreTracing()
   return 1;
 }
 
-uint32_t PingTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index)
+uint32_t PingTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index, double start_time)
 {
   if(nc.GetN() != ip_c.GetN())
   {
@@ -94,7 +94,7 @@ uint32_t PingTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& d
     hlp.SetAttribute("Verbose", BooleanValue(true));
     hlp.SetAttribute("Interval", TimeValue(Seconds(1.0)));
     ApplicationContainer a = hlp.Install(node);
-    a.Start(Seconds(var->GetValue(GetTotalSimTime()*0.1, GetTotalSimTime()*0.2)));
+    a.Start(Seconds(start_time + var->GetValue(GetTotalSimTime()*0.1, GetTotalSimTime()*0.2)));
     a.Stop(Seconds(GetTotalSimTime()));
 
     auto tmp_node = nc.Get(i);
@@ -111,7 +111,7 @@ uint32_t PingTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& d
 //================================
 
 //UdpCbrTraffic
-UdpCbrTraffic::UdpCbrTraffic() : m_interval(1.0), m_pckt_size(64), m_pckt_tracer(nullptr)
+UdpCbrTraffic::UdpCbrTraffic() : m_interval(1.0), m_pckt_size(64), m_pckt_tracer(nullptr), m_start(0)
 {
 
 }
@@ -125,7 +125,7 @@ NetTraffic* UdpCbrTraffic::Clone() const
   return new UdpCbrTraffic();
 }
 
-uint32_t UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index)
+uint32_t UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index, double start_time)
 {
   if(nc.GetN() != ip_c.GetN())
   {
@@ -133,6 +133,7 @@ uint32_t UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer&
   }
 
   m_sindex = stream_index;
+  m_start = start_time;
 
   Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
   var->SetStream(m_sindex++);
@@ -142,7 +143,6 @@ uint32_t UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer&
   Ptr<Node> src_node = src_ifs.first->GetNetDevice(src_ifs.second)->GetNode();
   std::string src_name_node = Names::FindName(src_node);
 
-  double start = 0;
   uint16_t cnter = 1;
   var->SetStream(m_sindex++);
   for(auto it = ip_c.Begin(); it != ip_c.End(); it++)
@@ -169,7 +169,7 @@ uint32_t UdpCbrTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer&
     m_pair_sockets.push_back(std::make_pair(source_socket, recvSink));
 
     Simulator::ScheduleWithContext (src_node->GetId (),
-                                    Seconds (start + var->GetValue(0.05, 0.4)), &UdpCbrTraffic::GenerateTraffic,
+                                    Seconds (m_start + var->GetValue(0.05, 0.4)), &UdpCbrTraffic::GenerateTraffic,
                                     this, source_socket);
     cnter++;
   }
@@ -185,7 +185,7 @@ int UdpCbrTraffic::ConfigreTracing()
 
   m_pckt_tracer->SetSocketsPair(m_pair_sockets);
   m_pckt_tracer->CreateOutput("pdr-udp-cbr-traffic.csv");
-  m_pckt_tracer->SetDumpInterval(m_interval, GetTotalSimTime());
+  m_pckt_tracer->SetDumpInterval(m_interval, m_start);
   return 0;
 }
 
@@ -228,7 +228,7 @@ NetTraffic* L3NodesDiscoverTraffic::Clone() const
   return new L3NodesDiscoverTraffic();
 }
 
-uint32_t L3NodesDiscoverTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index)
+uint32_t L3NodesDiscoverTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index, double start_time)
 {
   if(nc.GetN() != ip_c.GetN() || (devs.GetN() != nc.GetN()))
   {
@@ -236,12 +236,13 @@ uint32_t L3NodesDiscoverTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceC
   }
   m_sindex = stream_index;
   m_devs = devs;
+  m_start = start_time;
   //Random variable for start discovering
   Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
   var->SetStream(m_sindex);
 
   uint16_t cnter = 1;
-  double start = 0.5;
+  double start = 0.5 + m_start;
   for(auto ip_it = ip_c.Begin(); ip_it != ip_c.End(); ip_it++)
   {
     ns3::Ptr<NetDevice> dev = ip_it->first->GetNetDevice(ip_it->second);
@@ -284,7 +285,7 @@ int L3NodesDiscoverTraffic::ConfigreTracing()
   m_adj_tracer = CreateObject<AdjTracer>();
   m_adj_tracer->CreateOutput("potential.csv");
   m_adj_tracer->SetNodeDevices(m_devs);
-  m_adj_tracer->SetDumpInterval(1.0);
+  m_adj_tracer->SetDumpInterval(1.0, m_start);
   return 0;
 }
 
@@ -304,7 +305,7 @@ NetTraffic* UdpClientServerTraffic::Clone() const
   return new UdpClientServerTraffic();
 }
 
-uint32_t UdpClientServerTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index)
+uint32_t UdpClientServerTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceContainer& devs, ns3::Ipv4InterfaceContainer& ip_c, uint32_t stream_index, double start_time)
 {
   if(nc.GetN() != ip_c.GetN())
   {
@@ -312,6 +313,7 @@ uint32_t UdpClientServerTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceC
   }
 
   m_sindex = stream_index;
+  m_start = start_time;
 
   Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
   var->SetStream(m_sindex++);
@@ -345,7 +347,7 @@ uint32_t UdpClientServerTraffic::Install(ns3::NodeContainer& nc, ns3::NetDeviceC
     client.SetAttribute ("PacketSize", UintegerValue (m_pckt_size));
     apps = client.Install(src_node_c);
     var->SetStream(m_sindex++);
-    apps.Start(Seconds (var->GetValue(0.05, 0.4)));
+    apps.Start(Seconds (m_start + var->GetValue(0.05, 0.4)));
   }
 
   UdpServerHelper server (port);

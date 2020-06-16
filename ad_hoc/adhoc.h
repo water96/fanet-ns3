@@ -25,7 +25,7 @@ public:
                 std::string protocol);
 
   StatsCollector & GetStatsCollector ();
-  void ConfigureTracing ();
+  void ConfigureTracing (double start_time);
 
 private:
   void SetupRoutingProtocol (ns3::NodeContainer & c);

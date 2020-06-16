@@ -285,8 +285,11 @@ int main(int argc, char **argv)
   std::string traffic = "L3ND;UDP_CBR";
   cmd.AddValue ("traffic-models",  "Traffic models", traffic);
 
-  double total_time = 200.0;
+  double total_time = 210.0;
   cmd.AddValue ("time", "Time to simulate", total_time);
+
+  double trans_time = 10.0;
+  cmd.AddValue ("trans", "Transition tine", trans_time);
 
   double speed = 100.0;
   cmd.AddValue ("speed", "Average speed of nodes", speed);
@@ -360,6 +363,7 @@ int main(int argc, char **argv)
 
     exp->SetAttribute("nodes", UintegerValue(num_nodes));
     exp->SetAttribute("time", DoubleValue(total_time));
+    exp->SetAttribute("trans_time", DoubleValue(trans_time));
     exp->SetAttribute("mobility", StringValue(mobility));
     exp->SetAttribute("traffic", StringValue(traffic));
     exp->SetAttribute("routing", StringValue(routing));

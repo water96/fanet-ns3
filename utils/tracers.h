@@ -253,11 +253,11 @@ public:
     m_cb_out_map.at("node-deg") << hdr << std::endl;
   }
 
-  void SetDumpInterval(double s)
+  void SetDumpInterval(double s, double start_time)
   {
     m_interval = ns3::Seconds(s);
     m_dump_event.Cancel();
-    m_dump_event = ns3::Simulator::Schedule(m_interval, &AdjTracer::DumperCb, this);
+    m_dump_event = ns3::Simulator::Schedule(ns3::Seconds(s + start_time), &AdjTracer::DumperCb, this);
   }
 
   void DumperCb()
@@ -422,11 +422,11 @@ public:
     m_cb_out_map.at("node-deg") << hdr_str << std::endl;
   }
 
-  void SetDumpInterval(double s)
+  void SetDumpInterval(double s, double start_time)
   {
     m_interval = ns3::Seconds(s);
     m_dump_event.Cancel();
-    m_dump_event = ns3::Simulator::Schedule(m_interval, &AdjTxPowerTracer::DumperCb, this);
+    m_dump_event = ns3::Simulator::Schedule(ns3::Seconds(s + start_time), &AdjTxPowerTracer::DumperCb, this);
   }
 
   void DumperCb()
@@ -524,11 +524,11 @@ public:
     m_cb_out_map.at("node-adj") << hdr << std::endl;
   }
 
-  void SetDumpInterval(double s)
+  void SetDumpInterval(double s, double start_time)
   {
     m_interval = ns3::Seconds(s);
     m_dump_event.Cancel();
-    m_dump_event = ns3::Simulator::Schedule(m_interval, &NetworkAdjTracer::DumperCb, this);
+    m_dump_event = ns3::Simulator::Schedule(ns3::Seconds(s + start_time), &NetworkAdjTracer::DumperCb, this);
   }
 
   std::vector<RoutingEntry> ParseRoutingTable(const std::string& table)
@@ -1149,11 +1149,11 @@ public:
     ns3::Simulator::ScheduleDestroy(&IPv4AllStatsTracer::DumpIpForwardsStats, this);
   }
 
-  void SetDumpInterval(double s)
+  void SetDumpInterval(double s, double start_time)
   {
     m_interval = ns3::Seconds(s);
     m_dump_event.Cancel();
-    m_dump_event = ns3::Simulator::Schedule(m_interval, &IPv4AllStatsTracer::StatsDumper, this);
+    m_dump_event = ns3::Simulator::Schedule(ns3::Seconds(s + start_time), &IPv4AllStatsTracer::StatsDumper, this);
   }
 
   void AddCollectingStatsFrom(ns3::Ptr<ns3::Ipv4> ip, const std::string n_id)
@@ -1325,12 +1325,11 @@ public:
     }
   }
 
-  void SetDumpInterval(double sec, double total_time)
+  void SetDumpInterval(double sec, double start_time)
   {
     m_interval = ns3::Seconds(sec);
-    m_total = ns3::Seconds(total_time);
     m_dump_event.Cancel();
-    m_dump_event = ns3::Simulator::Schedule(m_interval, &PDRAndThroughputMetr::DumpStatistics, this);
+    m_dump_event = ns3::Simulator::Schedule(ns3::Seconds(sec + start_time), &PDRAndThroughputMetr::DumpStatistics, this);
   }
 
   void DumpTxRxPerNode()

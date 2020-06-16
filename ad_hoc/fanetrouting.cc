@@ -57,6 +57,10 @@ TypeId FanetRoutingExperiment::GetTypeId (void)
                    DoubleValue (),
                    MakeDoubleAccessor (&FanetRoutingExperiment::m_total_sim_time),
                    MakeDoubleChecker<double>(0.0, 1000.0))
+    .AddAttribute ("trans_time", "Transtion time",
+                   DoubleValue (0),
+                   MakeDoubleAccessor (&FanetRoutingExperiment::m_trans_time),
+                   MakeDoubleChecker<double>(0.0, 1000.0))
     .AddAttribute ("power", "Tx power",
                    DoubleValue (40.0),
                    MakeDoubleAccessor (&FanetRoutingExperiment::m_txp),
@@ -241,7 +245,7 @@ void FanetRoutingExperiment::ConfigureApplications ()
     ns3::Ptr<NetTraffic> tr = f.Create<NetTraffic>();
 
     tr->SetSimulationTime(m_total_sim_time);
-    m_streamIndex += tr->Install(m_adhocTxNodes, m_adhocTxDevices, m_adhocTxInterfaces, m_streamIndex);
+    m_streamIndex += tr->Install(m_adhocTxNodes, m_adhocTxDevices, m_adhocTxInterfaces, m_streamIndex, m_trans_time);
     m_traffic_generators.push_back(tr);
   }
 }
@@ -301,7 +305,7 @@ void FanetRoutingExperiment::ConfigureTracing ()
   //=============================
 
   //=============================
-  m_routingHelper.ConfigureTracing();
+  m_routingHelper.ConfigureTracing(m_trans_time);
   //=============================
 
   //=============================
@@ -339,7 +343,7 @@ void FanetRoutingExperiment::RunSimulation ()
 {
   NS_LOG_INFO ("Run Simulation.");
 
-  Simulator::Stop (Seconds (m_total_sim_time));
+  Simulator::Stop (Seconds (m_total_sim_time + 0.1));
   Simulator::Run ();
   Simulator::Destroy ();
 }
