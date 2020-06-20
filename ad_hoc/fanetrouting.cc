@@ -52,7 +52,7 @@ TypeId FanetRoutingExperiment::GetTypeId (void)
     .AddAttribute ("nodes", "Number of nodes in simulation",
                    UintegerValue (2),
                    MakeUintegerAccessor (&FanetRoutingExperiment::m_nNodes),
-                   MakeUintegerChecker<uint32_t> (2, 100))
+                   MakeUintegerChecker<uint32_t> (1, 100))
     .AddAttribute ("time", "Total simulation time",
                    DoubleValue (),
                    MakeDoubleAccessor (&FanetRoutingExperiment::m_total_sim_time),

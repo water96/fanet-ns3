@@ -417,9 +417,9 @@ std::string RPGMFANETMobility::CreateBmCommandString(const std::string& bm_path,
     r = area.x * 0.1;
   }
   ss << bm_path << "/bm -f RPGM_" << n << "_" << s << " RPGM "
-     << "-d " << t << " -i 100 -n " << n << " -x " << area.x << " -y " << area.y << " -J 2D -R " << r_seed
+     << "-d " << t << " -i 600 -n " << n << " -x " << area.x << " -y " << area.y << " -J 2D -R " << r_seed
      << " -h " << (s + 10) << " -l " << (s - 10) << " -p 0 "
-     << "-a " << (double)(n / 3.0) << " -c 0.75 -r " << r << " -s " << (double)(n / 2.0);
+     << "-a " << (double)(n / 2.0) << " -c 0.5 -r " << r << " -s " << (double)(n / 10.0);
 
   ss << "; " << bm_path << "/bm NSFile -f RPGM_" << n << "_" << s << " -b";
   return ss.str();

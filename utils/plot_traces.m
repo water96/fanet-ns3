@@ -1,4 +1,4 @@
-function [  ] = plot_traces( m )
+function [ p ] = plot_traces( m )
 %UNTITLED Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -24,8 +24,8 @@ function [  ] = plot_traces( m )
     end
     
     p = plot3(X, Y, Z);
-    legend('show');
     grid on;
+    legend('n' + string(1:1:N), 'Location', 'southoutside', 'Orientation', 'horizont');
     title('Nodes traces');
     xlabel('x(t)');
     ylabel('y(t)');

@@ -9,7 +9,7 @@ end
 r = ["AODV", "GPSR", "OLSR"];
 
 b = 0;
-c = zeros(nodes, length(r));
+c = zeros(length(nodes), length(r));
 
 c_max = 0;
 r_i = 1;
@@ -24,7 +24,7 @@ for i = 1 : length(r)
         return;
     end
     
-    c_local = nvm(:, v_i);
+    c_local = nvm(nodes, v_i);
     c(:, i) = c_local';
     
     c_m = max(c_local);
@@ -38,7 +38,7 @@ X = categorical(r);
 
 b = bar(X, c');
 grid on;
-legend('n = ' + string(n), 'Location', 'southoutside', 'Orientation', 'horizont');
+legend('n = ' + string(n(nodes)), 'Location', 'southoutside', 'Orientation', 'horizont');
 ylabel('Коэффициент связности');
 title(sprintf('Реальная связность сети в модели мобильности %s, v=%f', mob_name, vel));
 
