@@ -1,0 +1,227 @@
+diff --git a/src/mobility/helper/ns2-mobility-helper.cc b/src/mobility/helper/ns2-mobility-helper.cc
+index 6c3578a89..553fd79d7 100644
+--- a/src/mobility/helper/ns2-mobility-helper.cc
++++ b/src/mobility/helper/ns2-mobility-helper.cc
+@@ -48,10 +48,15 @@
+ #include "ns3/node.h"
+ #include "ns3/constant-velocity-mobility-model.h"
+ #include "ns2-mobility-helper.h"
++#include "ns3/attribute.h"
++#include "ns3/object.h"
++#include "ns3/double.h"
++#include "ns3/random-variable-stream.h"
+ 
+ namespace ns3 {
+ 
+ NS_LOG_COMPONENT_DEFINE ("Ns2MobilityHelper");
++NS_OBJECT_ENSURE_REGISTERED (Ns2MobilityHelper);
+ 
+ // Constants definitions
+ #define  NS2_AT       "at"
+@@ -169,7 +174,7 @@ static bool IsSchedMobilityPos (ParseResult pr);
+  * Set waypoints and speed for movement.
+  */
+ static DestinationPoint SetMovement (Ptr<ConstantVelocityMobilityModel> model, Vector lastPos, double at,
+-                                     double xFinalPosition, double yFinalPosition, double speed);
++                                     double xFinalPosition, double yFinalPosition, double zFinalPosition, double speed);
+ 
+ /**
+  * Set initial position for a node
+@@ -182,11 +187,47 @@ static Vector SetInitialPosition (Ptr<ConstantVelocityMobilityModel> model, std:
+ static Vector SetSchedPosition (Ptr<ConstantVelocityMobilityModel> model, double at, std::string coord, double coordVal);
+ 
+ 
++TypeId Ns2MobilityHelper::GetTypeId (void)
++{
++    static ns3::TypeId tid = ns3::TypeId ("ns3::Ns2MobilityHelper")
++      .SetParent<ns3::Object> ()
++      .AddConstructor<Ns2MobilityHelper> ()
++    ;
++    return tid;
++
++}
++
+ Ns2MobilityHelper::Ns2MobilityHelper (std::string filename)
+-  : m_filename (filename)
++  : m_filename (filename), m_z_c(0)
+ {
+-  std::ifstream file (m_filename.c_str (), std::ios::in);
+-  if (!(file.is_open ())) NS_FATAL_ERROR("Could not open trace file " << m_filename.c_str() << " for reading, aborting here \n"); 
++    OpenTraceFile(filename);
++}
++
++void
++Ns2MobilityHelper::Install (void) const
++{
++  Install (NodeList::Begin (), NodeList::End ());
++}
++
++Ns2MobilityHelper::Ns2MobilityHelper () : m_filename(""), m_z_c(0)
++{
++
++}
++
++void Ns2MobilityHelper::SetZCoord(ns3::Ptr<ns3::RandomVariableStream> stream)
++{
++  m_z_c = stream;
++}
++
++int Ns2MobilityHelper::OpenTraceFile(std::string filename)
++{
++    m_filename = filename;
++    std::ifstream file (m_filename.c_str (), std::ios::in);
++    if (!(file.is_open ()))
++    {
++        NS_FATAL_ERROR("Could not open trace file " << m_filename.c_str() << " for reading, aborting here \n");
++    }
++    return 0;
+ }
+ 
+ Ptr<ConstantVelocityMobilityModel>
+@@ -205,6 +246,7 @@ Ns2MobilityHelper::GetMobilityModel (std::string idString, const ObjectStore &st
+   if (model == 0)
+     {
+       model = CreateObject<ConstantVelocityMobilityModel> ();
++      model->SetPosition (Vector3D(0.0, 0.0, m_z_c->GetValue()));
+       object->AggregateObject (model);
+     }
+   return model;
+@@ -387,14 +429,14 @@ Ns2MobilityHelper::ConfigNodesMovements (const ObjectStore &store) const
+                       Vector reached = Vector (
+                           last_pos[iNodeId].m_startPosition.x + last_pos[iNodeId].m_speed.x * actuallytraveled,
+                           last_pos[iNodeId].m_startPosition.y + last_pos[iNodeId].m_speed.y * actuallytraveled,
+-                          0
++                          last_pos[iNodeId].m_startPosition.z + last_pos[iNodeId].m_speed.z * actuallytraveled
+                           );
+                       NS_LOG_LOGIC ("Final point = " << last_pos[iNodeId].m_finalPosition << ", actually reached = " << reached);
+                       last_pos[iNodeId].m_stopEvent.Cancel ();
+                       last_pos[iNodeId].m_finalPosition = reached;
+                     }
+                   //                                     last position     time  X coord     Y coord      velocity
+-                  last_pos[iNodeId] = SetMovement (model, last_pos[iNodeId].m_finalPosition, at, pr.dvals[5], pr.dvals[6], pr.dvals[7]);
++                  last_pos[iNodeId] = SetMovement (model, last_pos[iNodeId].m_finalPosition, at, pr.dvals[5], pr.dvals[6], m_z_c->GetValue(), pr.dvals[7]);
+ 
+                   // Log new position
+                   NS_LOG_DEBUG ("Positions after parse for node " << iNodeId << " " << nodeId << " position =" << last_pos[iNodeId].m_finalPosition);
+@@ -731,7 +773,7 @@ IsSchedMobilityPos (ParseResult pr)
+ 
+ DestinationPoint
+ SetMovement (Ptr<ConstantVelocityMobilityModel> model, Vector last_pos, double at,
+-             double xFinalPosition, double yFinalPosition, double speed)
++             double xFinalPosition, double yFinalPosition, double zFinalPosition, double speed)
+ {
+   DestinationPoint retval;
+   retval.m_startPosition = last_pos;
+@@ -749,7 +791,7 @@ SetMovement (Ptr<ConstantVelocityMobilityModel> model, Vector last_pos, double a
+   if (speed > 0)
+     {
+       // first calculate the time; time = distance / speed
+-      double time = std::sqrt (std::pow (xFinalPosition - retval.m_finalPosition.x, 2) + std::pow (yFinalPosition - retval.m_finalPosition.y, 2)) / speed;
++      double time = std::sqrt (std::pow (xFinalPosition - retval.m_finalPosition.x, 2) + std::pow (yFinalPosition - retval.m_finalPosition.y, 2) + std::pow (zFinalPosition - retval.m_finalPosition.z, 2)) / speed;
+       NS_LOG_DEBUG ("at=" << at << " time=" << time);
+       if (time == 0)
+         {
+@@ -758,10 +800,8 @@ SetMovement (Ptr<ConstantVelocityMobilityModel> model, Vector last_pos, double a
+       // now calculate the xSpeed = distance / time
+       double xSpeed = (xFinalPosition - retval.m_finalPosition.x) / time;
+       double ySpeed = (yFinalPosition - retval.m_finalPosition.y) / time; // & same with ySpeed
+-      retval.m_speed = Vector (xSpeed, ySpeed, 0);
+-
+-      // quick and dirty set zSpeed = 0
+-      double zSpeed = 0;
++      double zSpeed = (zFinalPosition - retval.m_finalPosition.z) / time; // & same with ySpeed
++      retval.m_speed = Vector (xSpeed, ySpeed, zSpeed);
+ 
+       NS_LOG_DEBUG ("Calculated Speed: X=" << xSpeed << " Y=" << ySpeed << " Z=" << zSpeed);
+ 
+@@ -770,6 +810,7 @@ SetMovement (Ptr<ConstantVelocityMobilityModel> model, Vector last_pos, double a
+       retval.m_stopEvent = Simulator::Schedule (Seconds (at + time), &ConstantVelocityMobilityModel::SetVelocity, model, Vector (0, 0, 0));
+       retval.m_finalPosition.x += xSpeed * time;
+       retval.m_finalPosition.y += ySpeed * time;
++      retval.m_finalPosition.z += zSpeed * time;
+       retval.m_targetArrivalTime += time;
+     }
+   return retval;
+@@ -807,10 +848,4 @@ SetSchedPosition (Ptr<ConstantVelocityMobilityModel> model, double at, std::stri
+   return position;
+ }
+ 
+-void
+-Ns2MobilityHelper::Install (void) const
+-{
+-  Install (NodeList::Begin (), NodeList::End ());
+-}
+-
+ } // namespace ns3
+diff --git a/src/mobility/helper/ns2-mobility-helper.h b/src/mobility/helper/ns2-mobility-helper.h
+index d2c38a202..cef5657c0 100644
+--- a/src/mobility/helper/ns2-mobility-helper.h
++++ b/src/mobility/helper/ns2-mobility-helper.h
+@@ -31,11 +31,12 @@
+ namespace ns3 {
+ 
+ class ConstantVelocityMobilityModel;
++class RandomVariableStream;
+ 
+ /**
+  * \ingroup mobility
+  * \brief Helper class which can read ns-2 movement files and configure nodes mobility.
+- * 
++ *
+  * This implementation is based on the ns2 movement documentation of ns2
+  * as described in http://www.isi.edu/nsnam/ns/doc/node172.html
+  *
+@@ -65,7 +66,7 @@ class ConstantVelocityMobilityModel;
+  * The following tools are known to support this format:
+  *  - BonnMotion http://net.cs.uni-bonn.de/wg/cs/applications/bonnmotion/
+  *  - SUMO http://sourceforge.net/apps/mediawiki/sumo/index.php?title=Main_Page
+- *  - TraNS http://trans.epfl.ch/ 
++ *  - TraNS http://trans.epfl.ch/
+  *
+  *  See usage example in examples/mobility/ns2-mobility-trace.cc
+  *
+@@ -73,15 +74,24 @@ class ConstantVelocityMobilityModel;
+  * pattern in ns-2 (using the same trace).
+  * See https://www.nsnam.org/bugzilla/show_bug.cgi?id=1316
+  */
+-class Ns2MobilityHelper
++class Ns2MobilityHelper : public ns3::Object
+ {
+ public:
+   /**
+    * \param filename filename of file which contains the
+    *        ns2 movement trace.
+    */
++
++    static ns3::TypeId GetTypeId (void);
++
++  Ns2MobilityHelper ();
++
+   Ns2MobilityHelper (std::string filename);
+ 
++  int OpenTraceFile(std::string filename);
++
++  void SetZCoord(ns3::Ptr<ns3::RandomVariableStream> stream);
++
+   /**
+    * Read the ns2 trace file and configure the movement
+    * patterns of all nodes contained in the global ns3::NodeList
+@@ -130,7 +140,8 @@ public:
+    * \return pointer to a ConstantVelocityMobilityModel
+    */
+   Ptr<ConstantVelocityMobilityModel> GetMobilityModel (std::string idString, const ObjectStore &store) const;
+-  std::string m_filename; //!< filename of file containing ns-2 mobility trace 
++  std::string m_filename; //!< filename of file containing ns-2 mobility trace
++  ns3::Ptr<ns3::RandomVariableStream> m_z_c;
+ };
+ 
+ } // namespace ns3
+@@ -138,7 +149,7 @@ public:
+ namespace ns3 {
+ 
+ template <typename T>
+-void 
++void
+ Ns2MobilityHelper::Install (T begin, T end) const
+ {
+   class MyObjectStore : public ObjectStore

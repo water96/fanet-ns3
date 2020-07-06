@@ -1,0 +1,162 @@
+diff --git a/paparazzi-mobility-model.cc b/paparazzi-mobility-model.cc
+index 0e64f1d..e9b36f3 100644
+--- a/paparazzi-mobility-model.cc
++++ b/paparazzi-mobility-model.cc
+@@ -52,6 +52,16 @@ namespace ns3 {
+ 						"A constant representing the radius of the arch (m).",
+ 						DoubleValue (1.0),
+ 						MakeDoubleAccessor (&PaparazziMobilityModel::m_radius),
++						MakeDoubleChecker<double> ())
++				.AddAttribute ("TimeStep",
++						"Time step (s)",
++						DoubleValue (0.5),
++						MakeDoubleAccessor (&PaparazziMobilityModel::m_ts),
++						MakeDoubleChecker<double> ())
++				.AddAttribute ("CircleRad",
++						"CircleRad (ms)",
++						DoubleValue (1.5),
++						MakeDoubleAccessor (&PaparazziMobilityModel::m_circle_move_radius),
+ 						MakeDoubleChecker<double> ());
+ 			return tid;
+ 		}
+@@ -75,7 +85,7 @@ namespace ns3 {
+ 		if(m_first){
+ 			m_first = false;
+ 			m_current = DoGetPosition();
+-			m_helper.SetPosition(Vector(0,0,0));
++			m_helper.SetPosition(m_current);
+ 			m_destination=RandomPosition();
+ 			update=MoveWaypoint();
+ 		}
+@@ -124,24 +134,27 @@ namespace ns3 {
+ 
+ void PaparazziMobilityModel::DoWalk (Time delayLeft){
+ 		m_helper.UpdateWithBounds (m_bounds);
+-		if (m_bounds.IsInside (m_next)){
++		//if (m_bounds.IsInside (m_next)){
+ 			m_event = Simulator::Schedule (delayLeft, &PaparazziMobilityModel::Start, this);
+-		}
+-		else{
+-			//nextPosition = m_bounds.CalculateIntersection (position, speed);
+-			//Time delay = Seconds ((nextPosition.x - position.x) / speed.x);
+-			//m_event = Simulator::Schedule (delay, &PaparazziMobilityModel::Rebound, this,
+-			//                               delayLeft - delay);
+-		}
++		//}
++		//else{
++//			m_next = m_bounds.CalculateIntersection (m_current, m_velocity);
++//			Time delay = Seconds ((nextPosition.x - position.x) / speed.x);
++//			m_event = Simulator::Schedule (delay, &PaparazziMobilityModel::Rebound, this,
++//						       delayLeft - delay);
++		//}
+ 		NotifyCourseChange ();
+ 	}
+ 
+ 	Vector3D PaparazziMobilityModel::RandomPosition(void) const{
+ 		Vector3D posi(0,0,0);
+-		posi.x = m_uniformStartPosition->GetValue(m_bounds.xMax-m_radius, m_bounds.xMin+m_radius);
+-		posi.y = m_uniformStartPosition->GetValue(m_bounds.yMax-m_radius, m_bounds.yMin+m_radius);
++		posi.x = m_uniformStartPosition->GetValue(m_bounds.xMin+m_radius, m_bounds.xMax-m_radius);
++		posi.y = m_uniformStartPosition->GetValue(m_bounds.yMin+m_radius, m_bounds.yMax-m_radius);
+ 		if (m_bounds.zMax>0)
+-			posi.z = m_uniformStartPosition->GetValue(m_bounds.zMax-m_radius, m_bounds.zMin+m_radius);
++		{
++			//posi.z = m_uniformStartPosition->GetValue(m_bounds.zMax-m_radius, m_bounds.zMin+m_radius);
++		    posi.z = m_uniformStartPosition->GetValue(m_bounds.zMin, m_bounds.zMax);
++		}
+ 		return posi;
+ 	}
+ 
+@@ -149,9 +162,9 @@ void PaparazziMobilityModel::DoWalk (Time delayLeft){
+ 		m_current=m_helper.GetCurrentPosition();
+ 		m_angle+=angle;
+ 		double current_angle = M_PI*m_angle/180;
+-		Vector position (0,0,0);
+-		position.y = m_current.y + std::sin(current_angle);
+-		position.x = m_current.x + std::cos(current_angle);
++		Vector position (0,0,m_current.z);
++		position.y = m_current.y + m_circle_move_radius*std::sin(current_angle);
++		position.x = m_current.x + m_circle_move_radius*std::cos(current_angle);
+ 		m_helper.SetPosition(Vector (position.x, position.y, position.z));
+ 		return (m_angle==endDegree)?true:false;
+ 	}
+@@ -167,8 +180,8 @@ void PaparazziMobilityModel::DoWalk (Time delayLeft){
+ 	}
+ 
+ 	Time PaparazziMobilityModel::MoveStayAt(){
+-		m_isdone=CircularMouvement(360,ANGLE);
+-		return Seconds(0.1);
++		m_isdone=CircularMouvement(360, ANGLE);
++		return Seconds(m_ts);
+ 	}
+ 
+ 	Time PaparazziMobilityModel::MoveOval(){
+@@ -183,14 +196,14 @@ void PaparazziMobilityModel::DoWalk (Time delayLeft){
+ 		else {
+ 			if (!m_isTurn){
+ 				if(m_helper.GetCurrentPosition().x<=m_origin.x)
+-					m_destination.x=m_origin.x - 4;
++					m_destination.x=m_origin.x - (m_bounds.xMax - m_bounds.xMin) / 10.0;
+ 				else
+-					m_destination.x=m_origin.x + 4;
++					m_destination.x=m_origin.x + (m_bounds.xMax - m_bounds.xMin) / 10.0;
+ 
+ 				if(m_helper.GetCurrentPosition().y<=m_origin.y)
+-					m_destination.y=m_origin.y + 6;
++					m_destination.y=m_origin.y + (m_bounds.yMax - m_bounds.yMin) / 7.0;
+ 				else
+-					m_destination.y=m_origin.y - 6;
++					m_destination.y=m_origin.y - (m_bounds.yMax - m_bounds.yMin) / 7.0;
+ 				m_destination.z=m_origin.z;
+ 				
+ 				
+@@ -199,7 +212,7 @@ void PaparazziMobilityModel::DoWalk (Time delayLeft){
+ 			}
+ 			else {
+ 				m_isTurn=!CircularMouvement(90,ANGLE);
+-				temps=Seconds(0.1);
++				temps=Seconds(m_ts);
+ 			}
+ 		}
+ 		return temps;
+@@ -218,14 +231,14 @@ void PaparazziMobilityModel::DoWalk (Time delayLeft){
+ 
+ 			if(!m_isTurn){
+ 				if(m_helper.GetCurrentPosition().x>m_origin.x)
+-					m_destination.x=m_origin.x - 4;
++					m_destination.x=m_origin.x - (m_bounds.xMax - m_bounds.xMin) / 10.0;
+ 				else
+-					m_destination.x=m_origin.x + 4;
++					m_destination.x=m_origin.x + (m_bounds.xMax - m_bounds.xMin) / 10.0;
+ 
+ 				if(m_helper.GetCurrentPosition().y>m_origin.y)
+-					m_destination.y=m_origin.y + 6;
++					m_destination.y=m_origin.y + (m_bounds.yMax - m_bounds.yMin) / 7.0;
+ 				else
+-					m_destination.y=m_origin.y - 6;
++					m_destination.y=m_origin.y - (m_bounds.yMax - m_bounds.yMin) / 7.0;
+ 				m_destination.z=m_origin.z;
+ 				
+ 				temps=MoveWaypoint();
+@@ -241,7 +254,7 @@ void PaparazziMobilityModel::DoWalk (Time delayLeft){
+ 					m_first=true;
+ 					m_isTurn=!CircularMouvement(270,ANGLE); //TODO allow to choice circular mouvement
+ 				}
+-				temps=Seconds(0.1);
++				temps=Seconds(m_ts);
+ 			}
+ 		}
+ 		return temps;
+diff --git a/paparazzi-mobility-model.h b/paparazzi-mobility-model.h
+index 595f059..c6922c7 100644
+--- a/paparazzi-mobility-model.h
++++ b/paparazzi-mobility-model.h
+@@ -71,6 +71,8 @@ namespace ns3 {
+ 			double m_velocity;
+ 			double m_radius;
+ 			double m_angle;
++			double m_ts;
++			double m_circle_move_radius;
+ 			bool m_first;
+ 			bool m_isdone;
+ 			bool m_startComplexMvt;

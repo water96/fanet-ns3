@@ -1,0 +1,516 @@
+diff --git a/src/gpsr/helper/gpsr-helper.cc b/src/gpsr/helper/gpsr-helper.cc
+index c0a2b46..bda0991 100644
+--- a/src/gpsr/helper/gpsr-helper.cc
++++ b/src/gpsr/helper/gpsr-helper.cc
+@@ -58,11 +58,16 @@ GpsrHelper::Set (std::string name, const AttributeValue &value)
+   m_agentFactory.Set (name, value);
+ }
+ 
++void
++GpsrHelper::Install () const
++{
++  NodeContainer c = NodeContainer::GetGlobal ();
++  Install(c);
++}
+ 
+ void 
+-GpsrHelper::Install (void) const
++GpsrHelper::Install (NodeContainer& c) const
+ {
+-  NodeContainer c = NodeContainer::GetGlobal ();
+   for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
+     {
+       Ptr<Node> node = (*i);
+@@ -71,8 +76,6 @@ GpsrHelper::Install (void) const
+       gpsr->SetDownTarget (udp->GetDownTarget ());
+       udp->SetDownTarget (MakeCallback(&gpsr::RoutingProtocol::AddHeaders, gpsr));
+     }
+-
+-
+ }
+ 
+ 
+diff --git a/src/gpsr/helper/gpsr-helper.h b/src/gpsr/helper/gpsr-helper.h
+index c6bae2b..2f30fe2 100644
+--- a/src/gpsr/helper/gpsr-helper.h
++++ b/src/gpsr/helper/gpsr-helper.h
+@@ -63,6 +63,7 @@ public:
+    */
+   void Set (std::string name, const AttributeValue &value);
+ 
++  void Install (NodeContainer& c) const;
+   void Install (void) const;
+ 
+ private:
+diff --git a/src/gpsr/model/gpsr-ptable.cc b/src/gpsr/model/gpsr-ptable.cc
+index 82fd20f..66ef6a3 100644
+--- a/src/gpsr/model/gpsr-ptable.cc
++++ b/src/gpsr/model/gpsr-ptable.cc
+@@ -38,7 +38,7 @@ void
+ PositionTable::AddEntry (Ipv4Address id, Vector position)
+ {
+   std::map<Ipv4Address, std::pair<Vector, Time> >::iterator i = m_table.find (id);
+-  if (i != m_table.end () || id.IsEqual (i->first))
++  if (i != m_table.end () || (id == i->first))
+     {
+       m_table.erase (id);
+       m_table.insert (std::make_pair (id, std::make_pair (position, Simulator::Now ())));
+@@ -89,7 +89,7 @@ PositionTable::isNeighbour (Ipv4Address id)
+ {
+ 
+  std::map<Ipv4Address, std::pair<Vector, Time> >::iterator i = m_table.find (id);
+-  if (i != m_table.end () || id.IsEqual (i->first))
++  if (i != m_table.end () || (id == i->first))
+     {
+       return true;
+     }
+diff --git a/src/gpsr/model/gpsr.cc b/src/gpsr/model/gpsr.cc
+index 75f08bc..0fab714 100644
+--- a/src/gpsr/model/gpsr.cc
++++ b/src/gpsr/model/gpsr.cc
+@@ -98,11 +98,11 @@ const uint32_t RoutingProtocol::GPSR_PORT = 666;
+ 
+ RoutingProtocol::RoutingProtocol ()
+   : HelloInterval (Seconds (1)),
++    m_delay(Seconds (0)),
+     MaxQueueLen (64),
+     MaxQueueTime (Seconds (30)),
+     m_queue (MaxQueueLen, MaxQueueTime),
+-    HelloIntervalTimer (Timer::CANCEL_ON_DESTROY),
+-    m_delay(Seconds (0))
++    HelloIntervalTimer (Timer::CANCEL_ON_DESTROY)
+ {
+ 
+   m_neighbors = PositionTable ();
+@@ -333,7 +333,7 @@ RoutingProtocol::SendPacketFromQueue (Ipv4Address dst)
+         
+         Vector Position;
+         Vector previousHop;
+-        uint32_t updated;
++        uint32_t updated = 0;
+         
+         while(m_queue.Dequeue (dst, queueEntry))
+           {
+@@ -401,7 +401,7 @@ RoutingProtocol::RecoveryMode(Ipv4Address dst, Ptr<Packet> p, UnicastForwardCall
+   //std::cout<<"Entered in recovery Mode\n";
+   Vector Position;
+   Vector previousHop;
+-  uint32_t updated;
++  uint32_t updated = 0;
+   uint64_t positionX;
+   uint64_t positionY;
+   Vector myPos;
+diff --git a/src/gpsr/model/gpsr.h b/src/gpsr/model/gpsr.h
+index 4edf8c9..ade939f 100644
+--- a/src/gpsr/model/gpsr.h
++++ b/src/gpsr/model/gpsr.h
+@@ -92,7 +92,7 @@ public:
+   void SetDownTarget (IpL4Protocol::DownTargetCallback callback);
+   IpL4Protocol::DownTargetCallback GetDownTarget (void) const;
+ 
+-  virtual void PrintRoutingTable (ns3::Ptr<ns3::OutputStreamWrapper>) const
++  virtual void PrintRoutingTable (Ptr<OutputStreamWrapper> stream, Time::Unit unit = Time::S) const
+   {
+     return;
+   }
+diff --git a/src/mmgpsr/helper/mmgpsr-helper.cc b/src/mmgpsr/helper/mmgpsr-helper.cc
+index 0e530a8..74b2b01 100644
+--- a/src/mmgpsr/helper/mmgpsr-helper.cc
++++ b/src/mmgpsr/helper/mmgpsr-helper.cc
+@@ -56,12 +56,17 @@ MMGpsrHelper::Set (std::string name, const AttributeValue &value)
+   m_agentFactory.Set (name, value);
+ }
+ 
+-
+-void 
+-MMGpsrHelper::Install (void) const
++void
++MMGpsrHelper::Install () const
+ {
+   NodeContainer c = NodeContainer::GetGlobal ();
+-  for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
++  Install(c);
++}
++
++void
++MMGpsrHelper::Install (NodeContainer& c) const
++{
++    for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
+     {
+       Ptr<Node> node = (*i);
+       Ptr<UdpL4Protocol> udp = node->GetObject<UdpL4Protocol> ();
+@@ -69,8 +74,6 @@ MMGpsrHelper::Install (void) const
+       mmgpsr->SetDownTarget (udp->GetDownTarget ());
+       udp->SetDownTarget (MakeCallback(&mmgpsr::RoutingProtocol::AddHeaders, mmgpsr));
+     }
+-
+-
+ }
+ 
+ 
+diff --git a/src/mmgpsr/helper/mmgpsr-helper.h b/src/mmgpsr/helper/mmgpsr-helper.h
+index e02f945..c8a5a46 100644
+--- a/src/mmgpsr/helper/mmgpsr-helper.h
++++ b/src/mmgpsr/helper/mmgpsr-helper.h
+@@ -58,6 +58,7 @@ public:
+    */
+   void Set (std::string name, const AttributeValue &value);
+ 
++  void Install (NodeContainer& c) const;
+   void Install (void) const;
+ 
+ private:
+diff --git a/src/mmgpsr/model/mmgpsr-Ttable.cc b/src/mmgpsr/model/mmgpsr-Ttable.cc
+index 3b1c90d..df8adc4 100644
+--- a/src/mmgpsr/model/mmgpsr-Ttable.cc
++++ b/src/mmgpsr/model/mmgpsr-Ttable.cc
+@@ -26,7 +26,7 @@ TTable::AddEntry (Ipv4Address id)
+   Time t_hello_old;
+ 
+   std::map<Ipv4Address, std::pair<Time , Time> >::iterator i = m_Ttable.find (id);
+-  if (i != m_Ttable.end () || id.IsEqual (i->first))
++  if (i != m_Ttable.end () || (id == i->first))
+     {
+       T_cum_old = i->second.first;
+       t_hello_old = i->second.second;
+diff --git a/src/mmgpsr/model/mmgpsr-ptable.cc b/src/mmgpsr/model/mmgpsr-ptable.cc
+index f3a8049..e4dcf2c 100644
+--- a/src/mmgpsr/model/mmgpsr-ptable.cc
++++ b/src/mmgpsr/model/mmgpsr-ptable.cc
+@@ -38,7 +38,7 @@ PositionTable::AddEntry (Ipv4Address id, Vector position)
+ {
+   m_Ttable.AddEntry(id);
+   std::map<Ipv4Address, std::pair<Vector, Time> >::iterator i = m_table.find (id);
+-  if (i != m_table.end () || id.IsEqual (i->first))
++  if (i != m_table.end () || (id == i->first))
+     {
+       m_table.erase (id);
+       m_table.insert (std::make_pair (id, std::make_pair (position, Simulator::Now ())));
+@@ -89,7 +89,7 @@ PositionTable::isNeighbour (Ipv4Address id)
+ {
+ 
+  std::map<Ipv4Address, std::pair<Vector, Time> >::iterator i = m_table.find (id);
+-  if (i != m_table.end () || id.IsEqual (i->first))
++  if (i != m_table.end () || (id == i->first))
+     {
+       return true;
+     }
+diff --git a/src/mmgpsr/model/mmgpsr.cc b/src/mmgpsr/model/mmgpsr.cc
+index 0d38c82..71f6aa7 100644
+--- a/src/mmgpsr/model/mmgpsr.cc
++++ b/src/mmgpsr/model/mmgpsr.cc
+@@ -310,7 +310,7 @@ RoutingProtocol::SendPacketFromQueue (Ipv4Address dst)
+         
+         Vector Position;
+         Vector previousHop;
+-        uint32_t updated;
++        uint32_t updated = 0;
+         
+         while(m_queue.Dequeue (dst, queueEntry))
+           {
+@@ -378,7 +378,7 @@ RoutingProtocol::RecoveryMode(Ipv4Address dst, Ptr<Packet> p, UnicastForwardCall
+ //std::cout<<"Entered in recovery Mode\n";
+   Vector Position;
+   Vector previousHop;
+-  uint32_t updated;
++  uint32_t updated = 0;
+   uint64_t positionX;
+   uint64_t positionY;
+   Vector myPos;
+diff --git a/src/mmgpsr/model/mmgpsr.h b/src/mmgpsr/model/mmgpsr.h
+index 4f0a355..0a17e59 100644
+--- a/src/mmgpsr/model/mmgpsr.h
++++ b/src/mmgpsr/model/mmgpsr.h
+@@ -87,7 +87,7 @@ public:
+   void SetDownTarget (IpL4Protocol::DownTargetCallback callback);
+   IpL4Protocol::DownTargetCallback GetDownTarget (void) const;
+ 
+-  virtual void PrintRoutingTable (ns3::Ptr<ns3::OutputStreamWrapper>) const
++  virtual void PrintRoutingTable (Ptr<OutputStreamWrapper> stream, Time::Unit unit = Time::S) const
+   {
+     return;
+   }
+diff --git a/src/pagpsr/helper/pagpsr-helper.cc b/src/pagpsr/helper/pagpsr-helper.cc
+index 252c140..9789cc0 100644
+--- a/src/pagpsr/helper/pagpsr-helper.cc
++++ b/src/pagpsr/helper/pagpsr-helper.cc
+@@ -56,12 +56,17 @@ PAGpsrHelper::Set (std::string name, const AttributeValue &value)
+   m_agentFactory.Set (name, value);
+ }
+ 
+-
+-void 
+-PAGpsrHelper::Install (void) const
++void
++PAGpsrHelper::Install () const
+ {
+   NodeContainer c = NodeContainer::GetGlobal ();
+-  for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
++  Install(c);
++}
++
++void
++PAGpsrHelper::Install (NodeContainer& c) const
++{
++    for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
+     {
+       Ptr<Node> node = (*i);
+       Ptr<UdpL4Protocol> udp = node->GetObject<UdpL4Protocol> ();
+diff --git a/src/pagpsr/helper/pagpsr-helper.h b/src/pagpsr/helper/pagpsr-helper.h
+index b1c770b..3ceae2c 100644
+--- a/src/pagpsr/helper/pagpsr-helper.h
++++ b/src/pagpsr/helper/pagpsr-helper.h
+@@ -63,6 +63,7 @@ public:
+    */
+   void Set (std::string name, const AttributeValue &value);
+ 
++  void Install (NodeContainer& c) const;
+   void Install (void) const;
+ 
+ private:
+diff --git a/src/pagpsr/model/pagpsr-ptable.cc b/src/pagpsr/model/pagpsr-ptable.cc
+index 7fc6f6f..086d07d 100644
+--- a/src/pagpsr/model/pagpsr-ptable.cc
++++ b/src/pagpsr/model/pagpsr-ptable.cc
+@@ -33,7 +33,7 @@ PositionTable::AddEntry (Ipv4Address id, Vector position, bool trustStatus)
+ {
+ 
+   std::map<Ipv4Address, std::pair< std::pair<Vector, Time>, bool> >::iterator i = m_table.find (id);
+-  if (i != m_table.end () || id.IsEqual (i->first))
++  if (i != m_table.end () || (id == i->first))
+     {
+ 
+       m_table.erase (id);
+@@ -99,7 +99,7 @@ PositionTable::isNeighbour (Ipv4Address id)
+ {
+ 
+  std::map<Ipv4Address, std::pair< std::pair<Vector, Time>, bool> >::iterator i = m_table.find (id);
+-  if (i != m_table.end () || id.IsEqual (i->first))
++  if (i != m_table.end () || (id == i->first))
+     {
+       return true;
+     }
+@@ -313,7 +313,7 @@ PositionTable::GetAngle (Vector centrePos, Vector refPos, Vector node){
+   Angle = tmp*tmpCplx;
+   Angle *= (180/PI);
+   if (real(Angle)<0){
+-    Angle = abs(real(Angle)) ;
++    Angle = std::abs(real(Angle)) ;
+   }
+ 
+   return real(Angle);
+@@ -333,20 +333,20 @@ PositionTable::BestRecoveryNeighbor (Ipv4Address previousHopIp, Vector position,
+     }     //if table is empty (no neighbours)
+ 
+   Ipv4Address bestFoundID = Ipv4Address::GetZero ();
+-  double bestFoundDistance = std::numeric_limits<double>::max();
++  //double bestFoundDistance = std::numeric_limits<double>::max();
+   double bestFoundAngle_right = 360;
+   double bestFoundAngle_left = 0;
+   std::pair<bool, std::string> sent;
+   double tmpAngle;
+   bool right = false;
+   bool left = false;
++  (void)left;
+ 
+-
+-	if(m_pair.first == "L"){
+-	    left = true;
+-	}else{
+-	    right = true;
+-	}
++  if(m_pair.first == "L"){
++      left = true;
++  }else{
++      right = true;
++  }
+ 
+ 
+   std::map<Ipv4Address, std::pair< std::pair<Vector, Time>, bool> >::iterator i;
+@@ -355,18 +355,18 @@ PositionTable::BestRecoveryNeighbor (Ipv4Address previousHopIp, Vector position,
+       tmpAngle = GetAngleOld(nodePos, PreviousPos, i->second.first.first);
+       sent = m_rst.FindPacket(i->first, m_pair);
+ 
+-      if (sent.first){
+-	if(m_pair.first == sent.second){
++  if (sent.first){
++    if(m_pair.first == sent.second){
+ 
+-		continue;
+-	}else{
+-		if (NodeRec == true){
+-			continue;
+-		}else{
+-			return Ipv4Address::GetZero ();
+-		}
+-	}
+-      }
++            continue;
++    }else{
++            if (NodeRec == true){
++                    continue;
++            }else{
++                    return Ipv4Address::GetZero ();
++            }
++    }
++  }
+       if (i->first == previousHopIp){
+ 
+ 	continue;
+diff --git a/src/pagpsr/model/pagpsr-rst-table.cc b/src/pagpsr/model/pagpsr-rst-table.cc
+index d1f19eb..d39cc2c 100644
+--- a/src/pagpsr/model/pagpsr-rst-table.cc
++++ b/src/pagpsr/model/pagpsr-rst-table.cc
+@@ -26,14 +26,14 @@ RstTable::AddEntry (Ipv4Address id, std::pair<std::string, std::pair<uint32_t,Ip
+ 
+   std::map<Ipv4Address, std::vector< std::pair<std::string, std::pair<uint32_t,Ipv4Address> > > >::iterator i = m_table_rst.find (id);
+ 
+-  if (i != m_table_rst.end () || id.IsEqual (i->first))
++  if (i != m_table_rst.end () || (id == i->first))
+     {
+ 
+       pvector = i->second;
+ 
+       std::vector<std::pair<uint32_t, Ipv4Address>> temp_pvector(pvector.size());
+ 
+-      for (int i=0 ; i < pvector.size() ; i++)
++      for (uint32_t i=0 ; i < pvector.size() ; i++)
+         temp_pvector[i] = pvector[i].second;
+ 
+       auto it = find(temp_pvector.begin(), temp_pvector.end(), m_pair.second);
+@@ -82,14 +82,14 @@ RstTable::FindPacket (Ipv4Address id, std::pair<std::string, std::pair<uint32_t,
+ 
+   std::map<Ipv4Address, std::vector< std::pair<std::string, std::pair<uint32_t,Ipv4Address> > > >::iterator i = m_table_rst.find (id);
+ 
+-  if (i != m_table_rst.end () || id.IsEqual (i->first))
++  if (i != m_table_rst.end () || (id == i->first))
+     {
+ 
+       pvector = i->second;
+ 
+       std::vector<std::pair<uint32_t, Ipv4Address>> temp_pvector(pvector.size());
+ 
+-      for (int i=0 ; i < pvector.size() ; i++)
++      for (uint32_t i=0 ; i < pvector.size() ; i++)
+         temp_pvector[i] = pvector[i].second;
+ 
+       auto it = find(temp_pvector.begin(), temp_pvector.end(), m_pair.second);
+diff --git a/src/pagpsr/model/pagpsr-rtable.cc b/src/pagpsr/model/pagpsr-rtable.cc
+index 03a750f..89c88ea 100644
+--- a/src/pagpsr/model/pagpsr-rtable.cc
++++ b/src/pagpsr/model/pagpsr-rtable.cc
+@@ -30,7 +30,7 @@ RTable::AddEntry (Ipv4Address id, Ipv4Address dest)
+ 
+   std::map<Ipv4Address, std::vector< Ipv4Address > >::iterator i = m_rtable.find (id);
+ 
+-  if (i != m_rtable.end () || id.IsEqual (i->first))
++  if (i != m_rtable.end () || (id == i->first))
+     {
+ 
+       pvector = i->second;
+@@ -78,7 +78,7 @@ RTable::FindPacket (Ipv4Address id, Ipv4Address dest)
+ 
+   std::map<Ipv4Address, std::vector< Ipv4Address > >::iterator i = m_rtable.find (id);
+ 
+-  if (i != m_rtable.end () || id.IsEqual (i->first))
++  if (i != m_rtable.end () || (id == i->first))
+     {
+ 
+       pvector = i->second;
+diff --git a/src/pagpsr/model/pagpsr.cc b/src/pagpsr/model/pagpsr.cc
+index a8b5164..2c69800 100644
+--- a/src/pagpsr/model/pagpsr.cc
++++ b/src/pagpsr/model/pagpsr.cc
+@@ -87,10 +87,10 @@ const uint32_t RoutingProtocol::PAGPSR_PORT = 666;
+ 
+ RoutingProtocol::RoutingProtocol ()
+   : HelloInterval (Seconds (1)),
++    gps_error(0),
+     MaxQueueLen (64),
+     MaxQueueTime (Seconds (30)),
+     m_queue (MaxQueueLen, MaxQueueTime),
+-    gps_error(0),
+     HelloIntervalTimer (Timer::CANCEL_ON_DESTROY)
+ {
+ 
+@@ -280,7 +280,7 @@ RoutingProtocol::SendPacketFromQueue (Ipv4Address dst)
+   RequestQueue m_queue_temp = m_queue;
+   QueueEntry queueEntry_temp;
+   QueueEntry queueEntry;
+-  int packet;
++  //int packet;
+   Ipv4Header header = queueEntry.GetIpv4Header ();
+   Ipv4Address origin = header.GetSource();
+   origin_packet = std::make_pair("", std::make_pair(99999, origin));
+@@ -324,7 +324,7 @@ RoutingProtocol::SendPacketFromQueue (Ipv4Address dst)
+         
+         Vector Position;
+         Vector previousHop;
+-        uint32_t updated;
++        uint32_t updated = 0;
+         
+         while(m_queue.Dequeue (dst, queueEntry))
+           {
+@@ -393,18 +393,18 @@ RoutingProtocol::RecoveryMode(Ipv4Address dst, Ptr<Packet> p, UnicastForwardCall
+ 
+   Vector Position;
+   Vector previousHop;
+-  uint32_t updated;
+-  uint64_t positionX;
+-  uint64_t positionY;
++  uint32_t updated = 0;
++//  uint64_t positionX;
++//  uint64_t positionY;
+   Vector myPos;
+   Vector recPos;
+   int packet = header.GetIdentification();
+   Ipv4Address origin = header.GetSource ();
+   uint8_t forward_method = 0;
+-  uint32_t n_it;
++  uint32_t n_it = 0;
+   std::string forwards[2] = {"R","L"};
+   std::vector<uint8_t> f_n (2);
+-  bool NodeRec;
++  bool NodeRec = false;
+   Ipv4Address previousHopIp;
+ 
+   origin_packet = std::make_pair("", std::make_pair(packet, origin));
+@@ -459,11 +459,14 @@ RoutingProtocol::RecoveryMode(Ipv4Address dst, Ptr<Packet> p, UnicastForwardCall
+              f_n[0] = 2;
+              NodeRec = false;
+              break;
++          default:
++            NS_ASSERT(false);
++          break;
+   }
+   Ptr<Ipv4Route> route = Create<Ipv4Route> ();
+   route->SetOutputDevice (m_ipv4->GetNetDevice (1));
+   route->SetDestination (dst);
+-  for (int i =0 ; i<n_it;i++){
++  for (uint32_t i =0 ; i<n_it;i++){
+ 
+           PositionHeader posHeader (Position.x, Position.y,  updated, recPos.x, recPos.y, (uint8_t) 1, myPos.x, myPos.y, (uint8_t) f_n[i]); 
+           p->AddHeader (posHeader);
+@@ -729,7 +732,8 @@ RoutingProtocol::SetIpv4 (Ptr<Ipv4> ipv4)
+   //Schedule only when it has packets on queue
+   CheckQueueTimer.SetFunction (&RoutingProtocol::CheckQueue, this);
+ 
+-  Simulator::ScheduleNow (&RoutingProtocol::Start, this);
++  //Simulator::ScheduleNow (&RoutingProtocol::Start, this);
++  Start();
+ }
+ 
+ void
+diff --git a/src/pagpsr/model/pagpsr.h b/src/pagpsr/model/pagpsr.h
+index 8cfbe47..f59df3d 100644
+--- a/src/pagpsr/model/pagpsr.h
++++ b/src/pagpsr/model/pagpsr.h
+@@ -93,7 +93,7 @@ public:
+   void SetDownTarget (IpL4Protocol::DownTargetCallback callback);
+   IpL4Protocol::DownTargetCallback GetDownTarget (void) const;
+ 
+-  virtual void PrintRoutingTable (ns3::Ptr<ns3::OutputStreamWrapper>) const
++  virtual void PrintRoutingTable (Ptr<OutputStreamWrapper> stream, Time::Unit unit = Time::S) const
+   {
+     return;
+   }
