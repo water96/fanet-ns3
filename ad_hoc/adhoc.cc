@@ -131,7 +131,6 @@ RoutingHelper::SetupRoutingProtocol (NodeContainer & c)
                                                                       delete p.second;
                                                                     });
 
-  //internet.EnablePcapIpv4All("ip-pcap");
 }
 
 void

@@ -241,7 +241,6 @@ uint32_t GMFANETMobility::Install(const ns3::NodeContainer& c, uint32_t stream_i
                                   "TimeStep", TimeValue (Seconds (2.0)),
                                   "Alpha", DoubleValue (0.95),
                                   "MeanVelocity", StringValue ("ns3::ConstantRandomVariable[Constant=" + std::to_string(m_speed) + "]"),
-                                  //"MeanDirection", StringValue ("ns3::UniformRandomVariable[Min=" + std::to_string(M_PI/4.0) + "|Max=" + std::to_string(3*M_PI/4.0) + "]"),
                                   "MeanDirection", StringValue ("ns3::ConstantRandomVariable[Constant=" + std::to_string(M_PI / 3.0) + "]"),
                                   "MeanPitch", StringValue ("ns3::ConstantRandomVariable[Constant=0]"),
                                   "NormalVelocity", StringValue ("ns3::NormalRandomVariable[Mean=0.0|Variance=" + std::to_string(speed_dev) + "|Bound=" + std::to_string(3*sqrt(speed_dev)) + "]"),

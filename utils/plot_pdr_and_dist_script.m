@@ -3,17 +3,18 @@ pdr_diff = diff(pdr);
 decr = find(pdr_diff < 0);
 subplot(2, 1, 1);
 plot(time, d, '-o', 'MarkerIndices', decr(1));
-grid on
+grid on;
 plot(time, d, '-o', 'MarkerIndices', decr(1), 'MarkerFaceColor', 'r');
-txt = ['\leftarrow link breaks at ', num2str(d(decr(1))), 'm'];
-text(time(decr(1)), d(decr(1)), txt);
-ylabel('Distance, m');
-title('PDR and Distance');
+grid on;
+txt = ['Разрыв связи при ', num2str(d(decr(1))), 'м'];
+text(time(decr(1)) - 40, d(decr(1)) + 100, txt);
+ylabel('Расстояние, м');
+title('Коэффициент доставки пакетов и расстояние между узлами');
 subplot(2, 1, 2);
 plot(time, pdr);
 grid on
 ylabel('PDR');
-xlabel('Time, s');
+xlabel('Время, с');
 ax1 = subplot(2, 1, 1);
 x_break = [time(1) time(length(time))];
 y_break = [d(decr(1)) d(decr(1))];

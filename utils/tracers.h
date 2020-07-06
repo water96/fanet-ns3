@@ -136,9 +136,6 @@ public:
     {
       it.second.close();
     }
-
-//    auto find_it = std::find(m_all_inst.begin(), m_all_inst.end(), this);
-//    m_all_inst.erase(find_it);
   }
 
   void CreateOutput(const std::string& post_fix)
