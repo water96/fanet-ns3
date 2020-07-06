@@ -1,5 +1,5 @@
 TEMPLATE = subdirs
 
 SUBDIRS = \
-        fanet \
+        fanet_proj \
         test
