@@ -1,0 +1,14 @@
+[ns3]
+url=https://github.com/nsnam/ns-3-dev-git.git
+commit=885c5168bbebc0f6fcd38e9e419ad177d77c324f
+
+[pprz]
+url=https://github.com/sbindel/PPRZM-ns3.git
+commit=d8666ad50323e4cc60d2d86110e0605cf3bbbad7
+
+[gpsr]
+url=https://github.com/CSVNetLab/PA-GPSR.git
+commit=ac0346d0c68f767e5ab293c02932a4bc4f4e5e60
+
+[export_fig]
+url=https://github.com/altmany/export_fig.git
