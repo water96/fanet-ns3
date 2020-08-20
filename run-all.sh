@@ -2,7 +2,7 @@
 
 RUNS="21..1..30"
 out="$(echo $RUNS | sed 's|\..|_|g')"
-out_dir="/home/aleksey/work/trans_sims"
+out_dir="./trans_sims"
 
 
 pprz_cmd='python3 ./exp.py -j4 -b"PPRZ-OLSR,AODV,GPSR-4..4..16-100..20..200-${RUNS}" -d ${out_dir}/PPRZ_${out}_FULL -l ${out_dir}/pprz_full_${out}.log'

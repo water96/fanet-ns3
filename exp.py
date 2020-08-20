@@ -12,7 +12,7 @@ import numpy as np
 
 STRING_DELIM = "\n=====================================\n"
 
-MODEL_EXEC = "/home/aleksey/work/first_ns3/build-ad_hoc-Desktop_Qt_5_12_6_GCC_64bit-Release/ad_hoc"
+MODEL_EXEC = ""
 
 NODES_STRING_DEFAULT = "2..2..20"
 SPEEDS_STRING_DEFAULT = "100..20..200"
@@ -116,6 +116,11 @@ def run_all(param_tuple, out_dir, jobs, log=""):
 
 if __name__ == '__main__':
   print('Script %s starts in directory %s%s' % (sys.argv[0], os.getcwd(), STRING_DELIM))
+
+  os.chdir(os.path.dirname(sys.argv[0]))
+  MODEL_EXEC = os.path.join(os.getcwd(), "fanet", "fanet")
+
+  print("%s" % MODEL_EXEC)
 
   opt = parse_cmd_args(sys.argv)
 
